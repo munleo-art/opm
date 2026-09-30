@@ -84,7 +84,7 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 0 80px' }}>
       <div style={{ position: 'relative', width: 76, height: 76, marginBottom: 16 }}>
-        <Avatar staff={me} size={76} />
+        <Avatar me={me} size={76} />
         <button
           onClick={() => fileInputRef.current?.click()}
           aria-label="Đổi ảnh đại diện"
