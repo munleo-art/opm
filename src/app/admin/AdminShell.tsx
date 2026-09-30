@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createClient } from '../../lib/supabase/client';
 import type { Staff, Department } from '../../lib/types';
 import { canSeeAdmin, canSeeAllStaffAdmin, visibleStaff } from '../../lib/permissions';
+import AddStaffModal from './AddStaffModal';
 
 type StaffRow = Staff & { is_active?: boolean; department: Department | null };
 
@@ -25,7 +26,9 @@ export default function AdminShell() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<Staff | null>(null);
   const [rows, setRows] = useState<StaffRow[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<StaffRow | null>(null);
+  const [showAddStaff, setShowAddStaff] = useState(false);
   const [error, setError] = useState('');
 
   async function fetchAll() {
@@ -66,6 +69,10 @@ export default function AdminShell() {
       return;
     }
     setRows(visibleStaff((staffRows || []) as StaffRow[], myRow));
+
+    const { data: deptRows } = await supabase.from('departments').select('*').order('name');
+    setDepartments((deptRows || []) as Department[]);
+
     setLoading(false);
   }
 
@@ -153,7 +160,34 @@ export default function AdminShell() {
       </div>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 100px' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 600 }}>Quản lý nhân sự</h1>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 12,
+            flexWrap: 'wrap',
+            marginBottom: 4
+          }}
+        >
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>Quản lý nhân sự</h1>
+          <button
+            onClick={() => setShowAddStaff(true)}
+            style={{
+              height: 40,
+              padding: '0 18px',
+              borderRadius: 10,
+              border: 'none',
+              background: 'var(--accent)',
+              color: 'var(--accent-contrast)',
+              fontSize: 13.5,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            + Thêm nhân sự
+          </button>
+        </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
           {canSeeAllStaffAdmin(me) ? `${rows.length} nhân sự trên toàn hệ thống` : `${rows.length} nhân sự của team bạn`}
         </div>
@@ -241,6 +275,15 @@ export default function AdminShell() {
           </div>
         ))}
       </div>
+
+      {showAddStaff && (
+        <AddStaffModal
+          me={me}
+          departments={departments}
+          onClose={() => setShowAddStaff(false)}
+          onCreated={() => fetchAll()}
+        />
+      )}
 
       {deleteTarget && (
         <>
