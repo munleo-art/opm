@@ -848,7 +848,7 @@ export default function ReportShell() {
                     style={{
                       fontSize: 13,
                       fontWeight: 600,
-                      color: status.key === 'ontrack' ? '#2563EB' : 'var(--text)'
+                      color: status.key === 'ontrack' ? '#7B9ACC' : 'var(--text)'
                     }}
                   >
                     {s.project.title}
