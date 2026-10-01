@@ -100,6 +100,7 @@ export default function ReportShell() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sheetExporting, setSheetExporting] = useState(false);
   const [sheetError, setSheetError] = useState('');
+  const [lastSheetUrl, setLastSheetUrl] = useState('');
 
   useEffect(() => {
     async function fetchAll() {
@@ -236,6 +237,19 @@ export default function ReportShell() {
     const { header, rows } = buildExportTable();
     setSheetExporting(true);
     setSheetError('');
+    setLastSheetUrl('');
+
+    // Phải mở tab mới NGAY lúc bấm (đồng bộ, trong user gesture) — nếu đợi fetch xong mới
+    // window.open(), nhiều trình duyệt sẽ coi đó là pop-up không phải do người dùng bấm và
+    // âm thầm chặn, không báo lỗi gì. Mở tab trống trước rồi nạp link vào sau khi có kết quả.
+    const newTab = window.open('', '_blank');
+    if (newTab) {
+      newTab.document.write(
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Đang tạo báo cáo…</title></head>' +
+          '<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#666;margin:0;">Đang tạo Google Sheet, vui lòng đợi…</body></html>'
+      );
+    }
+
     try {
       const res = await fetch('/api/export-sheet', {
         method: 'POST',
@@ -248,6 +262,7 @@ export default function ReportShell() {
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
+        if (newTab) newTab.close();
         if (data.error === 'not_configured') {
           setSheetError('Chưa cấu hình kết nối Google Sheets. Anh tải CSV tạm nhé, em đang hoàn tất phần này.');
         } else {
@@ -255,8 +270,14 @@ export default function ReportShell() {
         }
         return;
       }
-      window.open(data.url, '_blank');
+      if (newTab) {
+        newTab.location.href = data.url;
+      } else {
+        // Trình duyệt chặn cả tab trống ban đầu — hiện link để anh tự bấm.
+        setLastSheetUrl(data.url);
+      }
     } catch {
+      if (newTab) newTab.close();
       setSheetError('Không kết nối được tới máy chủ, thử lại sau.');
     } finally {
       setSheetExporting(false);
@@ -312,6 +333,16 @@ export default function ReportShell() {
             <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.2 }}>BÁO CÁO TỔNG HỢP</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {lastSheetUrl && (
+              <a
+                href={lastSheetUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 11.5, color: 'var(--accent)', fontWeight: 700, textDecoration: 'underline' }}
+              >
+                Trình duyệt chặn tab mới — bấm vào đây để mở Sheet
+              </a>
+            )}
             {sheetError && <div style={{ fontSize: 11.5, color: '#C63C3C', maxWidth: 260 }}>{sheetError}</div>}
             <button
               onClick={exportCsv}
