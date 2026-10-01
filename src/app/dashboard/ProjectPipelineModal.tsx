@@ -50,6 +50,7 @@ export default function ProjectPipelineModal({
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineHour, setDeadlineHour] = useState('09');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const mktStaff = allStaff.filter((s) => s.department?.name === 'Ban Marketing');
   const ttthStaff = allStaff.filter((s) => s.department?.name === 'Ban TTTH');
@@ -101,6 +102,7 @@ export default function ProjectPipelineModal({
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
+    setError('');
 
     const deadlineIso = deadlineDate ? new Date(`${deadlineDate}T${deadlineHour}:00:00`).toISOString() : null;
 
@@ -120,27 +122,45 @@ export default function ProjectPipelineModal({
     let projectId = selectedProjectId;
 
     if (isExisting) {
-      await supabase.from('projects').update(payload).eq('id', projectId);
+      const { error: updateErr } = await supabase.from('projects').update(payload).eq('id', projectId);
+      if (updateErr) {
+        setError('Không cập nhật được dự án: ' + updateErr.message);
+        setSaving(false);
+        return;
+      }
     } else {
-      const { data: newProject } = await supabase
+      const { data: newProject, error: insertErr } = await supabase
         .from('projects')
         .insert({ ...payload, created_by: me.id })
         .select()
         .single();
-      projectId = newProject?.id ?? '';
+      if (insertErr || !newProject) {
+        setError('Không tạo được dự án: ' + (insertErr?.message || 'Lỗi không xác định, vui lòng thử lại.'));
+        setSaving(false);
+        return;
+      }
+      projectId = newProject.id;
     }
 
     // Dashboard chỉ liệt kê dự án theo ĐẦU VIỆC (bảng tasks) hoặc BRIEF — dự án không có
     // đầu việc/brief nào sẽ ẩn hoàn toàn khỏi Dashboard dù đã lưu thành công. Modal này chỉ
     // ghi vào bảng projects nên phải tự tạo kèm 1 đầu việc mặc định để dự án hiện ra ngay.
     if (projectId) {
-      const [{ data: existingTasks }, { data: existingBriefs }] = await Promise.all([
+      const [{ data: existingTasks, error: taskCheckErr }, { data: existingBriefs, error: briefCheckErr }] = await Promise.all([
         supabase.from('tasks').select('id').eq('project_id', projectId).limit(1),
         supabase.from('briefs').select('id').eq('project_id', projectId).limit(1)
       ]);
 
+      if (taskCheckErr || briefCheckErr) {
+        setError(
+          'Dự án đã được lưu, nhưng không kiểm tra được đầu việc nên có thể dự án sẽ chưa hiện ở Dashboard. Vui lòng mở lại dự án này để kiểm tra, hoặc báo lại cho quản trị viên.'
+        );
+        setSaving(false);
+        return;
+      }
+
       if ((!existingTasks || existingTasks.length === 0) && (!existingBriefs || existingBriefs.length === 0)) {
-        const { data: newTask } = await supabase
+        const { data: newTask, error: taskErr } = await supabase
           .from('tasks')
           .insert({
             project_id: projectId,
@@ -157,6 +177,17 @@ export default function ProjectPipelineModal({
           })
           .select()
           .single();
+
+        if (taskErr || !newTask) {
+          setError(
+            'Dự án đã được lưu, nhưng KHÔNG tạo được đầu việc mặc định nên sẽ chưa hiện ở Dashboard. Vui lòng mở lại dự án "' +
+              title.trim() +
+              '" để thêm đầu việc, hoặc báo lại cho quản trị viên. Lỗi: ' +
+              (taskErr?.message || 'không xác định')
+          );
+          setSaving(false);
+          return;
+        }
 
         if (newTask) {
           const seed: { task_id: string; label: string; item_group: string; checked: boolean; sort_order: number }[] = [];
@@ -224,11 +255,70 @@ export default function ProjectPipelineModal({
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Thêm / cập nhật dự án</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+            {isExisting ? '✏️ Cập nhật dự án đã có' : '➕ Thêm dự án mới'}
+          </h3>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 16, cursor: 'pointer' }}>
             ✕
           </button>
         </div>
+
+        {isExisting && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              background: '#FFF4D6',
+              border: '1px solid #E8C468',
+              borderRadius: 10,
+              padding: '10px 12px',
+              marginBottom: 14,
+              fontSize: 12
+            }}
+          >
+            <span style={{ color: '#6B5200', lineHeight: 1.4 }}>
+              Dự án <strong>&quot;{title}&quot;</strong> đã có sẵn trong hệ thống. Bấm <strong>Cập nhật dự án</strong> bên dưới sẽ SỬA
+              dự án này, không tạo dự án mới.
+            </span>
+            <button
+              type="button"
+              onClick={() => resetToNew(projectQuery)}
+              style={{
+                flexShrink: 0,
+                border: '1px solid #E8C468',
+                background: '#FFFFFF',
+                color: '#6B5200',
+                borderRadius: 8,
+                padding: '6px 10px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Tạo dự án mới thay vào đó
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div
+            style={{
+              background: '#FDECEC',
+              border: '1px solid #F3B4B4',
+              borderRadius: 10,
+              padding: '10px 12px',
+              marginBottom: 14,
+              fontSize: 12,
+              color: '#C63C3C',
+              lineHeight: 1.4
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         <label style={{ ...labelStyle, position: 'relative' }}>
           Tên dự án
@@ -421,7 +511,7 @@ export default function ProjectPipelineModal({
               cursor: canSave ? 'pointer' : 'default'
             }}
           >
-            {saving ? 'Đang lưu...' : 'Lưu'}
+            {saving ? 'Đang lưu...' : isExisting ? 'Cập nhật dự án' : 'Lưu dự án mới'}
           </button>
         </div>
       </div>
