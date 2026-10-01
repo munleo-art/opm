@@ -8,15 +8,6 @@ import DatePicker from './DatePicker';
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const GROUP_OPTIONS = ['BĐS Miền Bắc', 'BĐS Miền Trung', 'BĐS Miền Nam', 'SSG', 'SCG', 'KLB'];
 
-function splitDeadline(d: string | null): { date: string; hour: string } {
-  if (!d) return { date: '', hour: '09' };
-  const dt = new Date(d);
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, '0');
-  const day = String(dt.getDate()).padStart(2, '0');
-  return { date: `${y}-${m}-${day}`, hour: String(dt.getHours()).padStart(2, '0') };
-}
-
 export default function ProjectPipelineModal({
   projects,
   allStaff,
@@ -34,21 +25,28 @@ export default function ProjectPipelineModal({
 }) {
   const supabase = createClient();
 
+  // "Tên dự án" chỉ dùng để XÁC ĐỊNH dự án (chọn 1 dự án có sẵn, hoặc đặt tên cho dự án mới) —
+  // không còn liên quan gì tới nội dung công việc đang thêm, nên gõ/đổi ô này KHÔNG được phép
+  // xoá những gì đã nhập ở các ô công việc bên dưới.
   const [projectQuery, setProjectQuery] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-
   const [title, setTitle] = useState('');
   const [groupName, setGroupName] = useState('');
-  const [mktLeadId, setMktLeadId] = useState('');
-  const [ttthLeadId, setTtthLeadId] = useState('');
-  const [sangTaoLeadId, setSangTaoLeadId] = useState('');
-  const [dungPhimLeadId, setDungPhimLeadId] = useState('');
+
+  // Toàn bộ phần dưới đây mô tả ĐẦU VIỆC (công việc) đang được thêm — luôn ghi vào bảng tasks,
+  // không bao giờ ghi/đè lên bảng projects nữa.
+  const [taskName, setTaskName] = useState('');
+  const [mktId, setMktId] = useState('');
+  const [ttthId, setTtthId] = useState('');
+  const [stId, setStId] = useState('');
+  const [dungId, setDungId] = useState('');
   const [briefLink, setBriefLink] = useState('');
   const [kichBanLink, setKichBanLink] = useState('');
   const [tvcLink, setTvcLink] = useState('');
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineHour, setDeadlineHour] = useState('09');
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,41 +61,44 @@ export default function ProjectPipelineModal({
 
   const isExisting = !!selectedProjectId;
 
-  function pickProject(p: Project) {
+  // Chọn 1 dự án có sẵn — dù bấm vào gợi ý hay gõ trùng khớp hẳn tên — luôn đi theo 1 đường
+  // duy nhất này, để không còn kiểu gõ xong không bấm gợi ý thì lại thành "tạo dự án mới trùng
+  // tên" như trước nữa.
+  function selectExisting(p: Project) {
     setSelectedProjectId(p.id);
     setProjectQuery(p.title);
-    setShowSuggestions(false);
     setTitle(p.title);
     setGroupName(p.group_name ?? '');
-    setMktLeadId(p.mkt_lead_id ?? '');
-    setTtthLeadId(p.ttth_lead_id ?? '');
-    setSangTaoLeadId(p.sang_tao_lead_id ?? '');
-    setDungPhimLeadId(p.dung_phim_lead_id ?? '');
-    setBriefLink(p.brief_link ?? '');
-    setKichBanLink(p.kich_ban_link ?? '');
-    setTvcLink(p.tvc_link ?? '');
-    const { date, hour } = splitDeadline(p.deadline);
-    setDeadlineDate(date);
-    setDeadlineHour(hour);
+    setShowSuggestions(false);
   }
 
-  function resetToNew(query: string) {
+  function clearProjectSelection(query: string) {
     setSelectedProjectId('');
     setProjectQuery(query);
     setTitle(query);
     setGroupName('');
-    setMktLeadId('');
-    setTtthLeadId('');
-    setSangTaoLeadId('');
-    setDungPhimLeadId('');
-    setBriefLink('');
-    setKichBanLink('');
-    setTvcLink('');
-    setDeadlineDate('');
-    setDeadlineHour('09');
   }
 
-  const canSave = title.trim() && groupName.trim() && !saving;
+  const canSave = title.trim() && taskName.trim() && (isExisting || groupName.trim()) && !saving;
+
+  // Seed checklist mặc định theo vai trò vừa gán cho đầu việc này.
+  function buildChecklistSeed(taskId: string) {
+    const seed: { task_id: string; label: string; item_group: string; checked: boolean; sort_order: number }[] = [];
+    let sortOrder = 0;
+    if (stId) {
+      seed.push({ task_id: taskId, label: 'Đang triển khai', item_group: 'start', checked: false, sort_order: sortOrder++ });
+      seed.push({ task_id: taskId, label: 'Duyệt kịch bản v1', item_group: 'script', checked: false, sort_order: sortOrder++ });
+      seed.push({ task_id: taskId, label: 'Check bản dựng TVC v1', item_group: 'build', checked: false, sort_order: sortOrder++ });
+    }
+    if (dungId) {
+      seed.push({ task_id: taskId, label: 'Dựng v1', item_group: 'dung', checked: false, sort_order: sortOrder++ });
+      seed.push({ task_id: taskId, label: 'Dựng v2', item_group: 'dung', checked: false, sort_order: sortOrder++ });
+    }
+    if (stId || dungId) {
+      seed.push({ task_id: taskId, label: 'Hoàn thành', item_group: 'end', checked: false, sort_order: sortOrder++ });
+    }
+    return seed;
+  }
 
   async function handleSave() {
     if (!canSave) return;
@@ -106,109 +107,58 @@ export default function ProjectPipelineModal({
 
     const deadlineIso = deadlineDate ? new Date(`${deadlineDate}T${deadlineHour}:00:00`).toISOString() : null;
 
-    const payload = {
-      title: title.trim(),
-      group_name: groupName.trim(),
-      mkt_lead_id: mktLeadId || null,
-      ttth_lead_id: ttthLeadId || null,
-      sang_tao_lead_id: sangTaoLeadId || null,
-      dung_phim_lead_id: dungPhimLeadId || null,
-      brief_link: briefLink.trim() || null,
-      kich_ban_link: kichBanLink.trim() || null,
-      tvc_link: tvcLink.trim() || null,
-      deadline: deadlineIso
-    };
-
     let projectId = selectedProjectId;
+    let createdProjectTitle = '';
 
-    if (isExisting) {
-      const { error: updateErr } = await supabase.from('projects').update(payload).eq('id', projectId);
-      if (updateErr) {
-        setError('Không cập nhật được dự án: ' + updateErr.message);
-        setSaving(false);
-        return;
-      }
-    } else {
-      const { data: newProject, error: insertErr } = await supabase
+    // Dự án MỚI hoàn toàn → tạo thêm vào danh sách dự án (chỉ tên + nhóm, không còn phụ
+    // trách/link/deadline ở cấp dự án — những thứ đó giờ thuộc về từng đầu việc).
+    if (!isExisting) {
+      const { data: newProject, error: insertProjectErr } = await supabase
         .from('projects')
-        .insert({ ...payload, created_by: me.id })
+        .insert({ title: title.trim(), group_name: groupName.trim(), created_by: me.id })
         .select()
         .single();
-      if (insertErr || !newProject) {
-        setError('Không tạo được dự án: ' + (insertErr?.message || 'Lỗi không xác định, vui lòng thử lại.'));
+      if (insertProjectErr || !newProject) {
+        setError('Không tạo được dự án: ' + (insertProjectErr?.message || 'Lỗi không xác định, vui lòng thử lại.'));
         setSaving(false);
         return;
       }
       projectId = newProject.id;
+      createdProjectTitle = title.trim();
     }
 
-    // Dashboard chỉ liệt kê dự án theo ĐẦU VIỆC (bảng tasks) hoặc BRIEF — dự án không có
-    // đầu việc/brief nào sẽ ẩn hoàn toàn khỏi Dashboard dù đã lưu thành công. Modal này chỉ
-    // ghi vào bảng projects nên phải tự tạo kèm 1 đầu việc mặc định để dự án hiện ra ngay.
-    if (projectId) {
-      const [{ data: existingTasks, error: taskCheckErr }, { data: existingBriefs, error: briefCheckErr }] = await Promise.all([
-        supabase.from('tasks').select('id').eq('project_id', projectId).limit(1),
-        supabase.from('briefs').select('id').eq('project_id', projectId).limit(1)
-      ]);
+    // Dự án ĐÃ CÓ → không đụng vào bảng projects, chỉ thêm đúng 1 đầu việc mới vào dự án đó.
+    const { data: newTask, error: taskErr } = await supabase
+      .from('tasks')
+      .insert({
+        project_id: projectId,
+        task_name: taskName.trim(),
+        mkt_assignee_id: mktId || null,
+        ttth_assignee_id: ttthId || null,
+        st_assignee_id: stId || null,
+        dung_assignee_id: dungId || null,
+        brief_link: briefLink.trim() || null,
+        kich_ban_link: kichBanLink.trim() || null,
+        tvc_link: tvcLink.trim() || null,
+        deadline: deadlineIso,
+        created_by: me.id
+      })
+      .select()
+      .single();
 
-      if (taskCheckErr || briefCheckErr) {
-        setError(
-          'Dự án đã được lưu, nhưng không kiểm tra được đầu việc nên có thể dự án sẽ chưa hiện ở Dashboard. Vui lòng mở lại dự án này để kiểm tra, hoặc báo lại cho quản trị viên.'
-        );
-        setSaving(false);
-        return;
-      }
+    if (taskErr || !newTask) {
+      setError(
+        (createdProjectTitle ? `Đã tạo dự án mới "${createdProjectTitle}", nhưng ` : '') +
+          'không tạo được công việc: ' +
+          (taskErr?.message || 'Lỗi không xác định, vui lòng thử lại.')
+      );
+      setSaving(false);
+      return;
+    }
 
-      if ((!existingTasks || existingTasks.length === 0) && (!existingBriefs || existingBriefs.length === 0)) {
-        const { data: newTask, error: taskErr } = await supabase
-          .from('tasks')
-          .insert({
-            project_id: projectId,
-            task_name: title.trim(),
-            mkt_assignee_id: mktLeadId || null,
-            ttth_assignee_id: ttthLeadId || null,
-            st_assignee_id: sangTaoLeadId || null,
-            dung_assignee_id: dungPhimLeadId || null,
-            brief_link: briefLink.trim() || null,
-            kich_ban_link: kichBanLink.trim() || null,
-            tvc_link: tvcLink.trim() || null,
-            deadline: deadlineIso,
-            created_by: me.id
-          })
-          .select()
-          .single();
-
-        if (taskErr || !newTask) {
-          setError(
-            'Dự án đã được lưu, nhưng KHÔNG tạo được đầu việc mặc định nên sẽ chưa hiện ở Dashboard. Vui lòng mở lại dự án "' +
-              title.trim() +
-              '" để thêm đầu việc, hoặc báo lại cho quản trị viên. Lỗi: ' +
-              (taskErr?.message || 'không xác định')
-          );
-          setSaving(false);
-          return;
-        }
-
-        if (newTask) {
-          const seed: { task_id: string; label: string; item_group: string; checked: boolean; sort_order: number }[] = [];
-          let sortOrder = 0;
-          if (sangTaoLeadId) {
-            seed.push({ task_id: newTask.id, label: 'Đang triển khai', item_group: 'start', checked: false, sort_order: sortOrder++ });
-            seed.push({ task_id: newTask.id, label: 'Duyệt kịch bản v1', item_group: 'script', checked: false, sort_order: sortOrder++ });
-            seed.push({ task_id: newTask.id, label: 'Check bản dựng TVC v1', item_group: 'build', checked: false, sort_order: sortOrder++ });
-          }
-          if (dungPhimLeadId) {
-            seed.push({ task_id: newTask.id, label: 'Dựng v1', item_group: 'dung', checked: false, sort_order: sortOrder++ });
-            seed.push({ task_id: newTask.id, label: 'Dựng v2', item_group: 'dung', checked: false, sort_order: sortOrder++ });
-          }
-          if (sangTaoLeadId || dungPhimLeadId) {
-            seed.push({ task_id: newTask.id, label: 'Hoàn thành', item_group: 'end', checked: false, sort_order: sortOrder++ });
-          }
-          if (seed.length > 0) {
-            await supabase.from('checklist_items').insert(seed);
-          }
-        }
-      }
+    const seed = buildChecklistSeed(newTask.id);
+    if (seed.length > 0) {
+      await supabase.from('checklist_items').insert(seed);
     }
 
     setSaving(false);
@@ -255,9 +205,7 @@ export default function ProjectPipelineModal({
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            {isExisting ? '✏️ Cập nhật dự án đã có' : '➕ Thêm dự án mới'}
-          </h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>➕ Thêm công việc mới</h3>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 16, cursor: 'pointer' }}>
             ✕
           </button>
@@ -270,26 +218,26 @@ export default function ProjectPipelineModal({
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 10,
-              background: '#FFF4D6',
-              border: '1px solid #E8C468',
+              background: 'rgba(46,125,50,0.1)',
+              border: '1px solid rgba(46,125,50,0.35)',
               borderRadius: 10,
               padding: '10px 12px',
               marginBottom: 14,
               fontSize: 12
             }}
           >
-            <span style={{ color: '#6B5200', lineHeight: 1.4 }}>
-              Dự án <strong>&quot;{title}&quot;</strong> đã có sẵn trong hệ thống. Bấm <strong>Cập nhật dự án</strong> bên dưới sẽ SỬA
-              dự án này, không tạo dự án mới.
+            <span style={{ color: '#2E7D32', lineHeight: 1.4 }}>
+              Dự án <strong>&quot;{title}&quot;</strong> đã có sẵn — công việc bên dưới sẽ được thêm vào dự án này, không tạo
+              dự án mới.
             </span>
             <button
               type="button"
-              onClick={() => resetToNew(projectQuery)}
+              onClick={() => clearProjectSelection(projectQuery)}
               style={{
                 flexShrink: 0,
-                border: '1px solid #E8C468',
+                border: '1px solid var(--border)',
                 background: '#FFFFFF',
-                color: '#6B5200',
+                color: 'var(--text)',
                 borderRadius: 8,
                 padding: '6px 10px',
                 fontSize: 11.5,
@@ -298,7 +246,7 @@ export default function ProjectPipelineModal({
                 whiteSpace: 'nowrap'
               }}
             >
-              Tạo dự án mới thay vào đó
+              Không phải dự án này
             </button>
           </div>
         )}
@@ -321,16 +269,18 @@ export default function ProjectPipelineModal({
         )}
 
         <label style={{ ...labelStyle, position: 'relative' }}>
-          Tên dự án
+          Dự án
           <input
             value={projectQuery}
             onChange={(e) => {
               const v = e.target.value;
               const match = projects.find((p) => p.title.toLowerCase() === v.trim().toLowerCase());
-              if (!match) resetToNew(v);
+              if (match) selectExisting(match);
               else {
+                setSelectedProjectId('');
                 setProjectQuery(v);
                 setTitle(v);
+                setGroupName('');
               }
               setShowSuggestions(true);
             }}
@@ -358,7 +308,7 @@ export default function ProjectPipelineModal({
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => pickProject(p)}
+                  onClick={() => selectExisting(p)}
                   style={{
                     display: 'block',
                     width: '100%',
@@ -377,29 +327,47 @@ export default function ProjectPipelineModal({
             </div>
           )}
           {!isExisting && projectQuery.trim() && (
-            <span style={{ fontSize: 10.5, color: '#2E7D32', fontWeight: 400 }}>Sẽ tạo dự án mới với tên này</span>
+            <span style={{ fontSize: 10.5, color: '#2E7D32', fontWeight: 400 }}>Chưa có trong danh sách — sẽ tạo dự án mới với tên này</span>
           )}
         </label>
 
         <label style={labelStyle}>
           Thuộc nhóm
-          <select
-            value={GROUP_OPTIONS.includes(groupName) ? groupName : ''}
-            onChange={(e) => setGroupName(e.target.value)}
+          {isExisting ? (
+            <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', color: 'var(--muted)', background: 'var(--chip)' }}>
+              {groupName || '—'}
+            </div>
+          ) : (
+            <select
+              value={GROUP_OPTIONS.includes(groupName) ? groupName : ''}
+              onChange={(e) => setGroupName(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">— Chọn nhóm —</option>
+              {GROUP_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {g.replace('BĐS ', '')}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+
+        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 16px' }} />
+
+        <label style={labelStyle}>
+          Tên công việc
+          <input
+            value={taskName}
+            onChange={(e) => setTaskName(e.target.value)}
+            placeholder="VD: TVC đợt 2, Banner Tết, Bài đăng Fanpage..."
             style={inputStyle}
-          >
-            <option value="">— Chọn nhóm —</option>
-            {GROUP_OPTIONS.map((g) => (
-              <option key={g} value={g}>
-                {g.replace('BĐS ', '')}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label style={labelStyle}>
           Nhân sự Ban MKT
-          <select value={mktLeadId} onChange={(e) => setMktLeadId(e.target.value)} style={inputStyle}>
+          <select value={mktId} onChange={(e) => setMktId(e.target.value)} style={inputStyle}>
             <option value="">— Chưa chọn —</option>
             {mktStaff.map((s) => (
               <option key={s.id} value={s.id}>
@@ -411,7 +379,7 @@ export default function ProjectPipelineModal({
 
         <label style={labelStyle}>
           Nhân sự Ban TTTH
-          <select value={ttthLeadId} onChange={(e) => setTtthLeadId(e.target.value)} style={inputStyle}>
+          <select value={ttthId} onChange={(e) => setTtthId(e.target.value)} style={inputStyle}>
             <option value="">— Chưa chọn —</option>
             {ttthStaff.map((s) => (
               <option key={s.id} value={s.id}>
@@ -423,7 +391,7 @@ export default function ProjectPipelineModal({
 
         <label style={labelStyle}>
           Nhân sự Ban ST
-          <select value={sangTaoLeadId} onChange={(e) => setSangTaoLeadId(e.target.value)} style={inputStyle}>
+          <select value={stId} onChange={(e) => setStId(e.target.value)} style={inputStyle}>
             <option value="">— Chưa chọn —</option>
             {stStaff.map((s) => (
               <option key={s.id} value={s.id}>
@@ -435,7 +403,7 @@ export default function ProjectPipelineModal({
 
         <label style={labelStyle}>
           Nhân sự Dựng
-          <select value={dungPhimLeadId} onChange={(e) => setDungPhimLeadId(e.target.value)} style={inputStyle}>
+          <select value={dungId} onChange={(e) => setDungId(e.target.value)} style={inputStyle}>
             <option value="">— Chưa chọn —</option>
             {dungStaff.map((s) => (
               <option key={s.id} value={s.id}>
@@ -511,7 +479,7 @@ export default function ProjectPipelineModal({
               cursor: canSave ? 'pointer' : 'default'
             }}
           >
-            {saving ? 'Đang lưu...' : isExisting ? 'Cập nhật dự án' : 'Lưu dự án mới'}
+            {saving ? 'Đang lưu...' : isExisting ? 'Thêm công việc vào dự án' : 'Tạo dự án + thêm công việc'}
           </button>
         </div>
       </div>

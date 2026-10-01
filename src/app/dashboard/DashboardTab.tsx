@@ -277,8 +277,8 @@ export default function DashboardTab({
           {canAddProject(me) && (
             <button
               onClick={() => setPipelineOpen(true)}
-              aria-label="Thêm / cập nhật dự án"
-              title="Thêm / cập nhật dự án"
+              aria-label="Thêm công việc mới"
+              title="Thêm công việc mới"
               style={{
                 height: 36,
                 width: 36,
