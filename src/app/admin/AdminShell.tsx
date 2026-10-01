@@ -156,6 +156,22 @@ export default function AdminShell() {
             </Link>
             <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.2 }}>QUẢN TRỊ NHÂN SỰ</span>
           </div>
+          <Link
+            href="/admin/bao-cao"
+            style={{
+              height: 36,
+              padding: '0 16px',
+              borderRadius: 9,
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--text)',
+              fontSize: 12.5,
+              fontWeight: 700
+            }}
+          >
+            📊 Báo cáo tổng hợp
+          </Link>
         </div>
       </div>
 

@@ -134,7 +134,7 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
       </div>
 
       {canSeeAdmin(me) && (
-        <div style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 24, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link
             href="/admin"
             style={{
@@ -155,6 +155,23 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
               <path d="M19.4 13a7.4 7.4 0 0 0 .1-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 1.7-1l2.3.9 2-3.4-2-1.5Z" />
             </svg>
             Trang quản trị
+          </Link>
+          <Link
+            href="/admin/bao-cao"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              height: 44,
+              padding: '0 20px',
+              borderRadius: 10,
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              fontSize: 14,
+              fontWeight: 600
+            }}
+          >
+            📊 Báo cáo tổng hợp
           </Link>
         </div>
       )}
