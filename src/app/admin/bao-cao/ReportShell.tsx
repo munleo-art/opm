@@ -98,6 +98,8 @@ export default function ReportShell() {
   const [groupFilter, setGroupFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusKey | ''>('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sheetExporting, setSheetExporting] = useState(false);
+  const [sheetError, setSheetError] = useState('');
 
   useEffect(() => {
     async function fetchAll() {
@@ -179,7 +181,7 @@ export default function ReportShell() {
   const soonCount = summaries.filter((s) => projectStatus(s).key === 'soon').length;
   const doneCount = summaries.filter((s) => projectStatus(s).key === 'done').length;
 
-  function exportCsv() {
+  function buildExportTable() {
     const header = [
       'Dự án',
       'Nhóm',
@@ -191,7 +193,7 @@ export default function ReportShell() {
       'Phụ trách Dựng phim',
       'Tiến độ (%)'
     ];
-    const body = sorted.map((s) => {
+    const rows = sorted.map((s) => {
       const status = projectStatus(s);
       return [
         s.project.title,
@@ -205,21 +207,60 @@ export default function ReportShell() {
         String(s.progress)
       ];
     });
-    const csv = [header, ...body].map((r) => r.map(csvEscape).join(',')).join('\r\n');
+    return { header, rows };
+  }
+
+  function todayStamp() {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+      today.getDate()
+    ).padStart(2, '0')}`;
+  }
+
+  function exportCsv() {
+    const { header, rows } = buildExportTable();
+    const csv = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\r\n');
     const csvWithBom = String.fromCharCode(0xfeff) + csv;
     const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const today = new Date();
-    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-      today.getDate()
-    ).padStart(2, '0')}`;
     a.href = url;
-    a.download = `bao-cao-tong-hop-${stamp}.csv`;
+    a.download = `bao-cao-tong-hop-${todayStamp()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  async function exportToGoogleSheets() {
+    const { header, rows } = buildExportTable();
+    setSheetExporting(true);
+    setSheetError('');
+    try {
+      const res = await fetch('/api/export-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Báo cáo tổng hợp ODE - ${todayStamp()}`,
+          header,
+          rows
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        if (data.error === 'not_configured') {
+          setSheetError('Chưa cấu hình kết nối Google Sheets. Anh tải CSV tạm nhé, em đang hoàn tất phần này.');
+        } else {
+          setSheetError('Không tạo được Google Sheet, thử lại sau.');
+        }
+        return;
+      }
+      window.open(data.url, '_blank');
+    } catch {
+      setSheetError('Không kết nối được tới máy chủ, thử lại sau.');
+    } finally {
+      setSheetExporting(false);
+    }
   }
 
   if (loading) {
@@ -270,25 +311,47 @@ export default function ReportShell() {
             </Link>
             <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.2 }}>BÁO CÁO TỔNG HỢP</span>
           </div>
-          <button
-            onClick={exportCsv}
-            style={{
-              height: 38,
-              padding: '0 16px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              color: 'var(--text)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            ⬇ Xuất ra Sheets
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {sheetError && <div style={{ fontSize: 11.5, color: '#C63C3C', maxWidth: 260 }}>{sheetError}</div>}
+            <button
+              onClick={exportCsv}
+              style={{
+                height: 38,
+                padding: '0 14px',
+                borderRadius: 10,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--muted)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              Tải CSV
+            </button>
+            <button
+              onClick={exportToGoogleSheets}
+              disabled={sheetExporting}
+              style={{
+                height: 38,
+                padding: '0 16px',
+                borderRadius: 10,
+                border: 'none',
+                background: 'var(--accent)',
+                color: 'var(--accent-contrast)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: sheetExporting ? 'default' : 'pointer',
+                opacity: sheetExporting ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              {sheetExporting ? 'Đang tạo...' : '📊 Mở Google Sheets'}
+            </button>
+          </div>
         </div>
       </div>
 
