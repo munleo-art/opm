@@ -123,6 +123,35 @@ function asInProgress(label: string) {
   return 'Đang ' + label.charAt(0).toLowerCase() + label.slice(1);
 }
 
+// Cột "TÌNH TRẠNG CỤ THỂ" ở bảng tổng hợp — thay cho badge trạng thái chung chung (Hoàn thành/
+// Sắp đến hạn/Đúng tiến độ...), hiện thẳng tình trạng checklist của từng đầu việc trong dự án.
+function statusCellContent(s: ProjectSummary) {
+  if (s.rows.length === 0) {
+    return <span style={{ color: 'var(--muted)', fontSize: 12 }}>⚪ Chưa có đầu việc</span>;
+  }
+  const MAX_LINES = 3;
+  const visible = s.rows.slice(0, MAX_LINES);
+  const hiddenCount = s.rows.length - visible.length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {visible.map((r) => {
+        const d = r.nearestDeadline ? daysUntil(r.nearestDeadline) : null;
+        const overdue = !r.completed && d !== null && d < 0;
+        const color = r.completed ? '#2E7D32' : overdue ? '#C63C3C' : 'var(--text)';
+        const text = s.rows.length > 1 ? `${r.headline || 'Đầu việc'}: ${workItemStatusText(r)}` : workItemStatusText(r);
+        return (
+          <div key={r.key} style={{ fontSize: 11.5, color, lineHeight: 1.35 }}>
+            {text}
+          </div>
+        );
+      })}
+      {hiddenCount > 0 && (
+        <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>+{hiddenCount} đầu việc khác — bấm để xem</div>
+      )}
+    </div>
+  );
+}
+
 function workItemStatusText(r: WorkRow): string {
   if (r.completed) return '✅ Hoàn thành';
 
@@ -775,7 +804,7 @@ export default function ReportShell() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1.6fr 0.9fr 1fr 1fr 1.6fr 1fr 0.5fr',
+              gridTemplateColumns: '1.5fr 0.8fr 1.9fr 1fr 1.3fr 0.9fr 0.4fr',
               gap: 10,
               padding: '11px 16px',
               borderBottom: '1px solid var(--border)',
@@ -787,7 +816,7 @@ export default function ReportShell() {
           >
             <div>DỰ ÁN</div>
             <div>NHÓM</div>
-            <div>TRẠNG THÁI</div>
+            <div>TÌNH TRẠNG CỤ THỂ</div>
             <div>DEADLINE GẦN NHẤT</div>
             <div>PHỤ TRÁCH</div>
             <div>TIẾN ĐỘ</div>
@@ -807,7 +836,7 @@ export default function ReportShell() {
                   onClick={() => setExpandedId(isExpanded ? null : s.project.id)}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '1.6fr 0.9fr 1fr 1fr 1.6fr 1fr 0.5fr',
+                    gridTemplateColumns: '1.5fr 0.8fr 1.9fr 1fr 1.3fr 0.9fr 0.4fr',
                     gap: 10,
                     alignItems: 'center',
                     padding: '12px 16px',
@@ -815,23 +844,17 @@ export default function ReportShell() {
                     cursor: 'pointer'
                   }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.project.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.project.group_name || '—'}</div>
-                  <div>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        padding: '3px 10px',
-                        borderRadius: 999,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: status.color,
-                        background: status.bg
-                      }}
-                    >
-                      {status.label}
-                    </span>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: status.key === 'ontrack' ? '#2563EB' : 'var(--text)'
+                    }}
+                  >
+                    {s.project.title}
                   </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.project.group_name || '—'}</div>
+                  <div>{statusCellContent(s)}</div>
                   <div style={{ fontSize: 12.5 }}>
                     {s.nearestDeadline ? new Date(s.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
                   </div>
