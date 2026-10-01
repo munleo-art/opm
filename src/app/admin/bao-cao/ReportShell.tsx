@@ -76,6 +76,34 @@ function projectStatus(s: ProjectSummary): StatusInfo {
   return { key: 'ontrack', label: '🟢 Đúng tiến độ', color: '#2E7D32', bg: 'rgba(46,125,50,0.1)' };
 }
 
+type RoleKey = 'mkt' | 'ttth' | 'st' | 'dung';
+
+const ROLE_LABEL: Record<RoleKey, string> = { mkt: 'MKT', ttth: 'TTTH', st: 'ST', dung: 'Dựng' };
+
+// Dự án nạp thẳng vào DB (không qua modal "Thêm dự án") có thể chưa từng được gán phụ trách
+// ở CẤP DỰ ÁN (project.mkt_lead_id/...) dù từng đầu việc bên trong đã có người phụ trách rồi.
+// Gộp cả 2 nguồn (phụ trách cấp dự án + người được giao ở từng đầu việc) để báo cáo không bao
+// giờ hiện trống trong khi Dashboard (vốn chỉ đọc theo đầu việc) vẫn thấy đầy đủ nhân sự.
+function roleStaffIds(s: ProjectSummary, role: RoleKey): string[] {
+  const ids = new Set<string>();
+  const leadId =
+    role === 'mkt'
+      ? s.project.mkt_lead_id
+      : role === 'ttth'
+      ? s.project.ttth_lead_id
+      : role === 'st'
+      ? s.project.sang_tao_lead_id
+      : s.project.dung_phim_lead_id;
+  if (leadId) ids.add(leadId);
+  s.rows.forEach((r) => {
+    if (role === 'mkt' && r.mktStaff) ids.add(r.mktStaff.id);
+    if (role === 'ttth' && r.ttthStaff) ids.add(r.ttthStaff.id);
+    if (role === 'st') r.stTasks.forEach((t) => t.st_assignee_id && ids.add(t.st_assignee_id));
+    if (role === 'dung') r.dungTasks.forEach((t) => t.dung_assignee_id && ids.add(t.dung_assignee_id));
+  });
+  return Array.from(ids);
+}
+
 function csvEscape(v: string) {
   const s = v ?? '';
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -156,7 +184,11 @@ export default function ReportShell() {
   const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
   const summaries = useMemo(() => buildProjectSummaries(projects, rows), [projects, rows]);
 
-  const leadName = (id: string | null) => allStaff.find((s) => s.id === id)?.name || '—';
+  const roleNames = (s: ProjectSummary, role: RoleKey) =>
+    roleStaffIds(s, role)
+      .map((id) => allStaff.find((st) => st.id === id)?.name)
+      .filter((n): n is string => !!n)
+      .join(', ');
 
   const filtered = useMemo(() => {
     return summaries.filter((s) => {
@@ -201,10 +233,10 @@ export default function ReportShell() {
         s.project.group_name || '',
         status.label.replace(/^[^\s]+\s/, ''),
         s.nearestDeadline ? new Date(s.nearestDeadline).toLocaleDateString('vi-VN') : '',
-        leadName(s.project.mkt_lead_id),
-        leadName(s.project.ttth_lead_id),
-        leadName(s.project.sang_tao_lead_id),
-        leadName(s.project.dung_phim_lead_id),
+        roleNames(s, 'mkt'),
+        roleNames(s, 'ttth'),
+        roleNames(s, 'st'),
+        roleNames(s, 'dung'),
         String(s.progress)
       ];
     });
@@ -479,12 +511,9 @@ export default function ReportShell() {
           {sorted.map((s) => {
             const status = projectStatus(s);
             const isExpanded = expandedId === s.project.id;
-            const leads = [
-              { role: 'MKT', id: s.project.mkt_lead_id },
-              { role: 'TTTH', id: s.project.ttth_lead_id },
-              { role: 'ST', id: s.project.sang_tao_lead_id },
-              { role: 'Dựng', id: s.project.dung_phim_lead_id }
-            ].filter((l) => l.id);
+            const leads = (['mkt', 'ttth', 'st', 'dung'] as RoleKey[])
+              .map((role) => ({ role: ROLE_LABEL[role], names: roleNames(s, role) }))
+              .filter((l) => l.names);
 
             return (
               <div key={s.project.id}>
@@ -523,7 +552,7 @@ export default function ReportShell() {
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     {leads.length === 0
                       ? '—'
-                      : leads.map((l) => `${l.role}: ${leadName(l.id)}`).join('  •  ')}
+                      : leads.map((l) => `${l.role}: ${l.names}`).join('  •  ')}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--chip)', overflow: 'hidden' }}>
