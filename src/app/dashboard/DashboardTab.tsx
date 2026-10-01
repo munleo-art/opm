@@ -30,12 +30,13 @@ function daysUntil(dateStr: string) {
 // Sát deadline 2 ngày (tính cả ngày deadline) => đỏ đậm.
 // Gần deadline 4 ngày (tính cả ngày deadline) => cam đậm.
 // Đã đánh dấu "Hoàn thành công việc" => xanh lá, bỏ qua trạng thái deadline.
+// Chưa tới hạn (hoặc chưa đặt deadline) và chưa hoàn thành => xanh blue, thay cho màu đen mặc định.
 function rowStyle(diffDays: number | null, completed: boolean) {
   if (completed) return { color: '#2E7D32', fontWeight: 400 };
-  if (diffDays === null) return { color: 'var(--text)', fontWeight: 400 };
+  if (diffDays === null) return { color: '#2563EB', fontWeight: 400 };
   if (diffDays <= 1) return { color: '#C63C3C', fontWeight: 700 };
   if (diffDays <= 3) return { color: '#C2760B', fontWeight: 700 };
-  return { color: 'var(--text)', fontWeight: 400 };
+  return { color: '#2563EB', fontWeight: 400 };
 }
 
 function ProgressBar({ percent }: { percent: number }) {
