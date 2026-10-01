@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '../../../lib/supabase/client';
-import type { Staff, Project, Task, Brief, Department } from '../../../lib/types';
+import type { Staff, Project, Task, Brief, Department, ChecklistItem } from '../../../lib/types';
 import { buildRows, type WorkRow } from '../../../lib/workRows';
 import { canSeeAdmin } from '../../../lib/permissions';
 
@@ -104,6 +104,173 @@ function roleStaffIds(s: ProjectSummary, role: RoleKey): string[] {
   return Array.from(ids);
 }
 
+// "Tình trạng cụ thể" — thay vì 1 con số % chung chung, lấy đúng BƯỚC đầu tiên CHƯA TICK của
+// từng ban trong checklist của đầu việc (vd "Duyệt kịch bản v1"), để biết đang vướng ở đâu.
+const ST_STEP_GROUPS = ['start', 'script', 'build'];
+const DUNG_STEP_GROUPS = ['dung'];
+
+function nextUncheckedLabel(items: ChecklistItem[] | undefined, groups: string[]): string | null {
+  const relevant = (items ?? [])
+    .filter((i) => groups.includes(i.item_group))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  if (relevant.length === 0) return null;
+  const next = relevant.find((i) => !i.checked);
+  return next ? next.label : null; // null = đã tick hết các bước của nhóm này
+}
+
+function asInProgress(label: string) {
+  if (/^đang\s/i.test(label)) return label;
+  return 'Đang ' + label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+function workItemStatusText(r: WorkRow): string {
+  if (r.completed) return '✅ Hoàn thành';
+
+  const parts: string[] = [];
+
+  if (r.mktStaff) {
+    const hasBrief = !!(r.brief?.link_url ?? r.primaryTask?.brief_link);
+    parts.push('MKT: ' + (hasBrief ? 'Đã gửi brief' : 'Chưa gửi brief'));
+  }
+
+  if (r.ttthStaff) {
+    parts.push('TTTH: ' + (r.ttthTask?.ttth_link ? 'Đã gửi link' : 'Chưa có link'));
+  }
+
+  r.stTasks.forEach((t) => {
+    const label = nextUncheckedLabel(t.checklist_items, ST_STEP_GROUPS);
+    parts.push('ST: ' + (label ? asInProgress(label) : 'Đã xong phần của mình'));
+  });
+
+  r.dungTasks.forEach((t) => {
+    const label = nextUncheckedLabel(t.checklist_items, DUNG_STEP_GROUPS);
+    parts.push('Dựng: ' + (label ? asInProgress(label) : 'Đã xong phần của mình'));
+  });
+
+  if (parts.length === 0) return r.progress > 0 ? `${r.progress}%` : 'Chưa bắt đầu';
+  return parts.join('  ·  ');
+}
+
+// Link SẢN PHẨM mới nhất — ưu tiên bản FINAL (Drive/YouTube), rồi tới TVC, rồi kịch bản, rồi
+// brief: luôn lấy link của bước đi XA NHẤT hiện có cho đầu việc này.
+function latestProductLink(r: WorkRow): string | null {
+  const finalSource = r.brief ?? r.backingTask;
+  if (finalSource?.final_drive_link) return finalSource.final_drive_link;
+  if (finalSource?.final_youtube_link) return finalSource.final_youtube_link;
+  const tvc = r.dungTasks[0]?.tvc_link || r.primaryTask?.tvc_link || r.backingTask?.tvc_link;
+  if (tvc) return tvc;
+  const kichBan = r.stTasks[0]?.kich_ban_link;
+  if (kichBan) return kichBan;
+  const brief = r.brief?.link_url || r.primaryTask?.brief_link || r.backingTask?.brief_link;
+  if (brief) return brief;
+  return null;
+}
+
+type DeptKey = 'st' | 'mkt' | 'ttth' | 'dung';
+
+const DEPT_OPTIONS: { key: DeptKey; label: string; deptName: string }[] = [
+  { key: 'st', label: 'Ban Sáng tạo', deptName: 'Ban Sáng tạo' },
+  { key: 'mkt', label: 'Ban Marketing', deptName: 'Ban Marketing' },
+  { key: 'ttth', label: 'Ban TTTH', deptName: 'Ban TTTH' },
+  { key: 'dung', label: 'Team Dựng phim', deptName: 'Team Dựng phim' }
+];
+
+function rowMatchesStaff(r: WorkRow, deptKey: DeptKey, staffId: string): boolean {
+  if (deptKey === 'mkt') return r.mktStaff?.id === staffId;
+  if (deptKey === 'ttth') return r.ttthStaff?.id === staffId;
+  if (deptKey === 'st') return r.stTasks.some((t) => t.st_assignee_id === staffId);
+  return r.dungTasks.some((t) => t.dung_assignee_id === staffId);
+}
+
+interface StaffWorkload {
+  staff: Staff;
+  open: number;
+  overdue: number;
+  soon: number;
+  done: number;
+}
+
+// Chỉ tính được "trễ hạn/sắp đến hạn" theo trạng thái NGAY LÚC XEM báo cáo — hệ thống chưa lưu
+// mốc thời gian hoàn thành nên không tính lại được tỷ lệ đúng hạn theo lịch sử.
+function buildStaffWorkload(rows: WorkRow[], allStaff: Staff[], deptKey: DeptKey): StaffWorkload[] {
+  const deptName = DEPT_OPTIONS.find((d) => d.key === deptKey)!.deptName;
+  const deptStaff = allStaff.filter((s) => s.department?.name === deptName);
+
+  return deptStaff
+    .map((staff) => {
+      const myRows = rows.filter((r) => rowMatchesStaff(r, deptKey, staff.id));
+      const openRows = myRows.filter((r) => !r.completed);
+      let overdue = 0;
+      let soon = 0;
+      openRows.forEach((r) => {
+        if (!r.nearestDeadline) return;
+        const d = daysUntil(r.nearestDeadline);
+        if (d < 0) overdue++;
+        else if (d <= 3) soon++;
+      });
+      return { staff, open: openRows.length, overdue, soon, done: myRows.length - openRows.length };
+    })
+    .sort((a, b) => b.open - a.open);
+}
+
+const WORKLOAD_PALETTE = ['#4F7CFF', '#2E7D32', '#C2760B', '#C63C3C', '#7C4DFF', '#00897B', '#AD1457', '#5D4037', '#546E7A', '#00ACC1'];
+
+function WorkloadDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  if (total === 0) {
+    return <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Chưa có ai đang cầm việc mở trong ban này.</div>;
+  }
+  let cursor = 0;
+  const stops = data.map((d) => {
+    const start = (cursor / total) * 360;
+    cursor += d.value;
+    const end = (cursor / total) * 360;
+    return `${d.color} ${start}deg ${end}deg`;
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          width: 150,
+          height: 150,
+          borderRadius: '50%',
+          background: `conic-gradient(${stops.join(', ')})`,
+          flexShrink: 0,
+          position: 'relative'
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 26,
+            borderRadius: '50%',
+            background: 'var(--surface)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 19,
+            fontWeight: 700
+          }}
+        >
+          {total}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 190 }}>
+        {data.map((d) => (
+          <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>{d.label}</span>
+            <span style={{ fontWeight: 700 }}>{d.value}</span>
+            <span style={{ color: 'var(--muted)', fontSize: 11, minWidth: 34, textAlign: 'right' }}>
+              {Math.round((d.value / total) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function csvEscape(v: string) {
   const s = v ?? '';
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -126,6 +293,7 @@ export default function ReportShell() {
   const [groupFilter, setGroupFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusKey | ''>('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [staffDept, setStaffDept] = useState<DeptKey>('st');
   const [sheetExporting, setSheetExporting] = useState(false);
   const [sheetError, setSheetError] = useState('');
   const [lastSheetUrl, setLastSheetUrl] = useState('');
@@ -183,6 +351,14 @@ export default function ReportShell() {
 
   const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
   const summaries = useMemo(() => buildProjectSummaries(projects, rows), [projects, rows]);
+  const workload = useMemo(() => buildStaffWorkload(rows, allStaff, staffDept), [rows, allStaff, staffDept]);
+  const workloadChartData = useMemo(
+    () =>
+      workload
+        .filter((w) => w.open > 0)
+        .map((w, i) => ({ label: w.staff.name, value: w.open, color: WORKLOAD_PALETTE[i % WORKLOAD_PALETTE.length] })),
+    [workload]
+  );
 
   const roleNames = (s: ProjectSummary, role: RoleKey) =>
     roleStaffIds(s, role)
@@ -218,29 +394,55 @@ export default function ReportShell() {
     const header = [
       'Dự án',
       'Nhóm',
-      'Trạng thái',
-      'Deadline gần nhất',
+      'Trạng thái dự án',
+      'Tên đầu việc',
+      'Tình trạng cụ thể',
+      'Deadline đầu việc',
+      'Link sản phẩm mới nhất',
       'Phụ trách MKT',
       'Phụ trách TTTH',
       'Phụ trách Sáng tạo',
       'Phụ trách Dựng phim',
       'Tiến độ (%)'
     ];
-    const rows = sorted.map((s) => {
+    const exportRows: string[][] = [];
+    sorted.forEach((s) => {
       const status = projectStatus(s);
-      return [
-        s.project.title,
-        s.project.group_name || '',
-        status.label.replace(/^[^\s]+\s/, ''),
-        s.nearestDeadline ? new Date(s.nearestDeadline).toLocaleDateString('vi-VN') : '',
-        roleNames(s, 'mkt'),
-        roleNames(s, 'ttth'),
-        roleNames(s, 'st'),
-        roleNames(s, 'dung'),
-        String(s.progress)
-      ];
+      if (s.rows.length === 0) {
+        exportRows.push([
+          s.project.title,
+          s.project.group_name || '',
+          status.label.replace(/^[^\s]+\s/, ''),
+          '',
+          '',
+          '',
+          '',
+          roleNames(s, 'mkt'),
+          roleNames(s, 'ttth'),
+          roleNames(s, 'st'),
+          roleNames(s, 'dung'),
+          String(s.progress)
+        ]);
+        return;
+      }
+      s.rows.forEach((r) => {
+        exportRows.push([
+          s.project.title,
+          s.project.group_name || '',
+          status.label.replace(/^[^\s]+\s/, ''),
+          r.headline || '',
+          workItemStatusText(r),
+          r.nearestDeadline ? new Date(r.nearestDeadline).toLocaleDateString('vi-VN') : '',
+          latestProductLink(r) || '',
+          roleNames(s, 'mkt'),
+          roleNames(s, 'ttth'),
+          roleNames(s, 'st'),
+          roleNames(s, 'dung'),
+          String(r.progress)
+        ]);
+      });
     });
-    return { header, rows };
+    return { header, rows: exportRows };
   }
 
   function todayStamp() {
@@ -455,6 +657,90 @@ export default function ReportShell() {
           ))}
         </div>
 
+        <div
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 16,
+            background: 'var(--surface)',
+            padding: '18px 20px',
+            marginBottom: 24
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>👥 Theo nhân sự</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                Ai đang cầm nhiều đầu việc mở, ai đang trễ hạn / sắp đến hạn — theo trạng thái hiện tại.
+              </div>
+            </div>
+            <select
+              value={staffDept}
+              onChange={(e) => setStaffDept(e.target.value as DeptKey)}
+              style={{ height: 36, padding: '0 10px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 12.5, background: 'var(--surface)' }}
+            >
+              {DEPT_OPTIONS.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <WorkloadDonut data={workloadChartData} />
+          </div>
+
+          {workload.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Ban này chưa có nhân sự.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.6fr 0.8fr 0.8fr 0.8fr 0.8fr',
+                  gap: 10,
+                  padding: '8px 4px',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: 'var(--muted)',
+                  letterSpacing: 0.3,
+                  minWidth: 440
+                }}
+              >
+                <div>NHÂN SỰ</div>
+                <div>ĐANG MỞ</div>
+                <div>TRỄ HẠN</div>
+                <div>SẮP ĐẾN HẠN</div>
+                <div>ĐÃ XONG</div>
+              </div>
+              {workload.map((w) => (
+                <div
+                  key={w.staff.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.6fr 0.8fr 0.8fr 0.8fr 0.8fr',
+                    gap: 10,
+                    padding: '9px 4px',
+                    borderBottom: '1px solid var(--border)',
+                    fontSize: 12.5,
+                    minWidth: 440
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{w.staff.name}</div>
+                  <div>{w.open}</div>
+                  <div style={{ color: w.overdue > 0 ? '#C63C3C' : 'inherit', fontWeight: w.overdue > 0 ? 700 : 400 }}>{w.overdue}</div>
+                  <div style={{ color: w.soon > 0 ? '#C2760B' : 'inherit', fontWeight: w.soon > 0 ? 700 : 400 }}>{w.soon}</div>
+                  <div style={{ color: 'var(--muted)' }}>{w.done}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 10 }}>
+            * Trễ hạn / sắp đến hạn tính theo thời điểm xem báo cáo, hệ thống chưa lưu lịch sử hoàn thành nên chưa tính được tỷ lệ đúng hạn theo lịch sử.
+          </div>
+        </div>
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <select
             value={groupFilter}
@@ -576,15 +862,33 @@ export default function ReportShell() {
                       <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '10px 0' }}>Chưa có đầu việc nào.</div>
                     ) : (
                       <div style={{ marginTop: 8 }}>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1.4fr 2fr 0.9fr 1fr',
+                            gap: 10,
+                            padding: '4px 0 6px',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: 'var(--muted)',
+                            letterSpacing: 0.3
+                          }}
+                        >
+                          <div>ĐẦU VIỆC</div>
+                          <div>TÌNH TRẠNG CỤ THỂ</div>
+                          <div>DEADLINE</div>
+                          <div>LINK SẢN PHẨM MỚI NHẤT</div>
+                        </div>
                         {s.rows.map((r) => {
                           const d = r.nearestDeadline ? daysUntil(r.nearestDeadline) : null;
                           const overdue = !r.completed && d !== null && d < 0;
+                          const link = latestProductLink(r);
                           return (
                             <div
                               key={r.key}
                               style={{
                                 display: 'grid',
-                                gridTemplateColumns: '2fr 1fr 1fr',
+                                gridTemplateColumns: '1.4fr 2fr 0.9fr 1fr',
                                 gap: 10,
                                 padding: '8px 0',
                                 fontSize: 12,
@@ -593,8 +897,22 @@ export default function ReportShell() {
                               }}
                             >
                               <div>{r.headline || '—'}</div>
+                              <div>{workItemStatusText(r)}</div>
                               <div>{r.nearestDeadline ? new Date(r.nearestDeadline).toLocaleDateString('vi-VN') : '—'}</div>
-                              <div>{r.completed ? 'Hoàn thành' : `${r.progress}%`}</div>
+                              <div onClick={(e) => e.stopPropagation()}>
+                                {link ? (
+                                  <a
+                                    href={link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+                                  >
+                                    Mở link
+                                  </a>
+                                ) : (
+                                  '—'
+                                )}
+                              </div>
                             </div>
                           );
                         })}
