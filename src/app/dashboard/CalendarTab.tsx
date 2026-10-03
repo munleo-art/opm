@@ -110,9 +110,9 @@ interface DayCell {
 interface Bar {
   key: string;
   row: WorkRow;
-  leftPct: number;
-  widthPct: number;
-  top: number;
+  startCol: number;
+  endCol: number;
+  lane: number;
   roundedLeft: boolean;
   roundedRight: boolean;
   color: string;
@@ -124,7 +124,7 @@ interface WeekData {
   height: number;
   days: DayCell[];
   bars: Bar[];
-  hiddenCount: number;
+  laneCount: number;
 }
 
 function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date): WeekData[] {
@@ -173,18 +173,18 @@ function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date
       item.lane = lane;
     });
 
+    // Dùng số cột nguyên (0-6) thay vì % để đặt thanh theo đúng lưới CSS Grid repeat(7,1fr) —
+    // cùng 1 lưới với lớp số ngày phía trên, nên ranh giới các thanh luôn khớp chính xác với
+    // ranh giới ô ngày, không bị lệch/đè lên nhau ở biên giữa 2 ngày.
     const bars: Bar[] = weekItems.map((item) => {
-      const leftPct = (item.startCol / 7) * 100;
-      const widthPct = ((item.endCol - item.startCol + 1) / 7) * 100;
-      const top = 30 + item.lane * LANE_HEIGHT;
       const roundedLeft = isSameDay(item.r.start, addDays(weekStart, item.startCol));
       const roundedRight = isSameDay(item.r.end, addDays(weekStart, item.endCol));
       return {
         key: `${item.r.row.key}-${w}`,
         row: item.r.row,
-        leftPct,
-        widthPct,
-        top,
+        startCol: item.startCol,
+        endCol: item.endCol,
+        lane: item.lane,
         roundedLeft,
         roundedRight,
         color: colorForProject(item.r.row.project.id),
@@ -196,9 +196,10 @@ function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date
     weekItems.forEach((item) => {
       if (item.lane + 1 > usedLanes) usedLanes = item.lane + 1;
     });
-    const weekHeight = 30 + Math.max(usedLanes, 1) * LANE_HEIGHT + 10;
+    const laneCount = Math.max(usedLanes, 1);
+    const weekHeight = 30 + laneCount * LANE_HEIGHT + 10;
 
-    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, hiddenCount: 0 });
+    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, laneCount });
   }
 
   return weeks;
@@ -227,6 +228,7 @@ export default function CalendarTab({
   const [selectedTeam, setSelectedTeam] = useState<DeptKey>('st');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(new Set());
 
   const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
 
@@ -242,8 +244,9 @@ export default function CalendarTab({
       .filter((r): r is RowRange => r !== null);
   }, [visibleRows]);
 
-  const weeks = useMemo(() => buildWeeks(year, month, ranges, today), [year, month, ranges, today]);
-
+  // Danh sách "Màu theo dự án" luôn liệt kê đủ các dự án trong lựa chọn team/nhân sự hiện tại
+  // (không bị rút gọn khi đang ẩn bớt), để bấm bật lại được. Chỉ phần render Lịch mới lọc bỏ
+  // các dự án đang bị ẩn.
   const legend = useMemo(() => {
     const seen = new Set<string>();
     const result: { id: string; title: string; color: string }[] = [];
@@ -256,6 +259,21 @@ export default function CalendarTab({
     });
     return result;
   }, [ranges]);
+
+  const visibleRanges = useMemo(
+    () => ranges.filter((r) => !hiddenProjectIds.has(r.row.project.id)),
+    [ranges, hiddenProjectIds]
+  );
+
+  const weeks = useMemo(() => buildWeeks(year, month, visibleRanges, today), [year, month, visibleRanges, today]);
+
+  function toggleProject(id: string) {
+    setHiddenProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const selectedRow = rows.find((r) => r.key === selectedRowKey) ?? null;
   const monthLabel = `${MONTH_NAMES[month]} ${year}`;
@@ -366,18 +384,39 @@ export default function CalendarTab({
           </div>
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 16, background: 'var(--surface)', padding: 14 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: 'var(--muted)', padding: '0 10px 10px' }}>
-              MÀU THEO DỰ ÁN
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px 10px' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: 'var(--muted)' }}>
+                MÀU THEO DỰ ÁN
+              </div>
+              {legend.length > 0 && hiddenProjectIds.size > 0 && (
+                <button
+                  onClick={() => setHiddenProjectIds(new Set())}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10.5, fontWeight: 700, color: 'var(--text)', textDecoration: 'underline' }}
+                >
+                  Hiện tất cả
+                </button>
+              )}
             </div>
             {legend.length === 0 ? (
               <div style={{ padding: '5px 10px', fontSize: 12, color: 'var(--muted)' }}>Chưa có công việc nào trong lựa chọn này.</div>
             ) : (
-              legend.map((lg) => (
-                <div key={lg.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', fontSize: 12 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: lg.color }} />
-                  <span>{lg.title}</span>
-                </div>
-              ))
+              legend.map((lg) => {
+                const isHidden = hiddenProjectIds.has(lg.id);
+                return (
+                  <div
+                    key={lg.id}
+                    onClick={() => toggleProject(lg.id)}
+                    title={isHidden ? 'Bấm để hiện lại trên Lịch' : 'Bấm để ẩn khỏi Lịch'}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', fontSize: 12,
+                      borderRadius: 7, cursor: 'pointer', opacity: isHidden ? 0.45 : 1
+                    }}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: lg.color }} />
+                    <span style={{ textDecoration: isHidden ? 'line-through' : 'none' }}>{lg.title}</span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -414,36 +453,50 @@ export default function CalendarTab({
                     ))}
                   </div>
 
-                  {week.bars.map((bar) => (
-                    <div
-                      key={bar.key}
-                      onClick={() => setSelectedRowKey(bar.row.key)}
-                      title={`${bar.row.project.title} — ${bar.row.headline}`}
-                      style={{
-                        position: 'absolute',
-                        left: `calc(${bar.leftPct}% + 3px)`,
-                        width: `calc(${bar.widthPct}% - 6px)`,
-                        top: bar.top,
-                        height: 20,
-                        borderRadius: `${bar.roundedLeft ? 7 : 2}px ${bar.roundedRight ? 7 : 2}px ${bar.roundedRight ? 7 : 2}px ${bar.roundedLeft ? 7 : 2}px`,
-                        background: bar.color,
-                        opacity: bar.completed ? 0.55 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '0 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: '#2B2B28',
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis',
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.08)'
-                      }}
-                    >
-                      {bar.completed ? '✅ ' : ''}{bar.row.project.title} · {bar.row.headline}
-                    </div>
-                  ))}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 30,
+                      bottom: 0,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7,1fr)',
+                      gridTemplateRows: `repeat(${week.laneCount}, ${LANE_HEIGHT}px)`
+                    }}
+                  >
+                    {week.bars.map((bar) => (
+                      <div
+                        key={bar.key}
+                        onClick={() => setSelectedRowKey(bar.row.key)}
+                        title={`${bar.row.project.title} — ${bar.row.headline}`}
+                        style={{
+                          gridColumn: `${bar.startCol + 1} / ${bar.endCol + 2}`,
+                          gridRow: bar.lane + 1,
+                          alignSelf: 'start',
+                          margin: '0 3px',
+                          height: 20,
+                          borderRadius: `${bar.roundedLeft ? 7 : 2}px ${bar.roundedRight ? 7 : 2}px ${bar.roundedRight ? 7 : 2}px ${bar.roundedLeft ? 7 : 2}px`,
+                          background: bar.color,
+                          opacity: bar.completed ? 0.55 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0 8px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: '#2B2B28',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        {bar.completed ? '✅ ' : ''}{bar.row.project.title} · {bar.row.headline}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
