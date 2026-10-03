@@ -20,9 +20,9 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-// Tối đa 4 thanh/tuần cho 1 ô ngày — quá số này thì gộp vào dòng "+N công việc khác" để
-// không vỡ layout khi 1 tuần có quá nhiều đầu việc chồng lịch cùng lúc.
-const MAX_LANES = 4;
+// Không giới hạn số thanh/tuần — mọi đầu việc trùng ngày đều phải có 1 dòng riêng,
+// xếp trên-dưới rõ ràng, không ẩn/che nhau. Chiều cao hàng tuần tự giãn theo số lượng.
+const LANE_HEIGHT = 24;
 
 // Màu pastel nhẹ, không dùng màu rực — mỗi dự án 1 màu cố định (hash theo id dự án) để nhiều
 // đầu việc cùng dự án luôn ra cùng màu, dù đang lọc theo team hay theo nhân sự.
@@ -173,36 +173,32 @@ function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date
       item.lane = lane;
     });
 
-    const bars: Bar[] = weekItems
-      .filter((item) => item.lane < MAX_LANES)
-      .map((item) => {
-        const leftPct = (item.startCol / 7) * 100;
-        const widthPct = ((item.endCol - item.startCol + 1) / 7) * 100;
-        const top = 30 + item.lane * 24;
-        const roundedLeft = isSameDay(item.r.start, addDays(weekStart, item.startCol));
-        const roundedRight = isSameDay(item.r.end, addDays(weekStart, item.endCol));
-        return {
-          key: `${item.r.row.key}-${w}`,
-          row: item.r.row,
-          leftPct,
-          widthPct,
-          top,
-          roundedLeft,
-          roundedRight,
-          color: colorForProject(item.r.row.project.id),
-          completed: item.r.row.completed
-        };
-      });
+    const bars: Bar[] = weekItems.map((item) => {
+      const leftPct = (item.startCol / 7) * 100;
+      const widthPct = ((item.endCol - item.startCol + 1) / 7) * 100;
+      const top = 30 + item.lane * LANE_HEIGHT;
+      const roundedLeft = isSameDay(item.r.start, addDays(weekStart, item.startCol));
+      const roundedRight = isSameDay(item.r.end, addDays(weekStart, item.endCol));
+      return {
+        key: `${item.r.row.key}-${w}`,
+        row: item.r.row,
+        leftPct,
+        widthPct,
+        top,
+        roundedLeft,
+        roundedRight,
+        color: colorForProject(item.r.row.project.id),
+        completed: item.r.row.completed
+      };
+    });
 
-    const hiddenCount = weekItems.length - bars.length;
     let usedLanes = 0;
     weekItems.forEach((item) => {
-      if (item.lane < MAX_LANES && item.lane + 1 > usedLanes) usedLanes = item.lane + 1;
+      if (item.lane + 1 > usedLanes) usedLanes = item.lane + 1;
     });
-    if (hiddenCount > 0) usedLanes = MAX_LANES + 1;
-    const weekHeight = 30 + Math.max(usedLanes, 1) * 24 + 10;
+    const weekHeight = 30 + Math.max(usedLanes, 1) * LANE_HEIGHT + 10;
 
-    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, hiddenCount });
+    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, hiddenCount: 0 });
   }
 
   return weeks;
@@ -448,12 +444,6 @@ export default function CalendarTab({
                       {bar.completed ? '✅ ' : ''}{bar.row.project.title} · {bar.row.headline}
                     </div>
                   ))}
-
-                  {week.hiddenCount > 0 && (
-                    <div style={{ position: 'absolute', left: 6, right: 6, top: 30 + MAX_LANES * 24, fontSize: 10.5, color: 'var(--muted)' }}>
-                      +{week.hiddenCount} công việc khác
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
