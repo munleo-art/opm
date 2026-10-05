@@ -42,6 +42,19 @@ function TaskChecklistBlock({
   const canEdit = canEditTaskChecklist(me, task);
   const [customDraft, setCustomDraft] = useState('');
 
+  // Đổi tên đầu việc (icon bút chì).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+
+  // Deadline dự kiến riêng cho từng đầu việc (icon lịch) — chỉ hiện khi bấm vào, không hiện mặc định.
+  const [deadlineEditingId, setDeadlineEditingId] = useState<string | null>(null);
+  const [deadlineDraft, setDeadlineDraft] = useState('');
+
+  // Kéo-thả đổi thứ tự (icon 3 gạch ngang). "Hoàn thành"/"Hoàn thiện" (item_group 'end') luôn
+  // bị loại khỏi danh sách có thể kéo và luôn được ghép lại ở cuối cùng sau khi lưu thứ tự mới.
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
   async function toggle(item: ChecklistItem) {
     if (!canEdit) return;
     await supabase.from('checklist_items').update({ checked: !item.checked }).eq('id', item.id);
@@ -52,6 +65,64 @@ function TaskChecklistBlock({
     if (!canEdit) return;
     await supabase.from('checklist_items').delete().eq('id', item.id);
     onRefetch();
+  }
+
+  function startEdit(item: ChecklistItem) {
+    setDeadlineEditingId(null);
+    setEditingId(item.id);
+    setEditDraft(item.label);
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    const label = editDraft.trim();
+    const id = editingId;
+    setEditingId(null);
+    if (!label) return;
+    await supabase.from('checklist_items').update({ label }).eq('id', id);
+    onRefetch();
+  }
+
+  function startDeadline(item: ChecklistItem) {
+    setEditingId(null);
+    setDeadlineEditingId(item.id);
+    setDeadlineDraft(item.deadline ?? '');
+  }
+
+  async function saveDeadline(item: ChecklistItem) {
+    setDeadlineEditingId(null);
+    await supabase.from('checklist_items').update({ deadline: deadlineDraft || null }).eq('id', item.id);
+    onRefetch();
+  }
+
+  async function clearDeadline(item: ChecklistItem) {
+    setDeadlineEditingId(null);
+    await supabase.from('checklist_items').update({ deadline: null }).eq('id', item.id);
+    onRefetch();
+  }
+
+  async function persistOrder(reordered: ChecklistItem[]) {
+    const endItems = items.filter((i) => i.item_group === 'end');
+    const finalOrder = [...reordered, ...endItems];
+    await Promise.all(
+      finalOrder.map((it, idx) => supabase.from('checklist_items').update({ sort_order: idx }).eq('id', it.id))
+    );
+    onRefetch();
+  }
+
+  function handleDrop(targetId: string) {
+    const draggedId = dragItemId;
+    setDragItemId(null);
+    setDragOverId(null);
+    if (!draggedId || draggedId === targetId) return;
+    const reorderable = items.filter((i) => i.item_group !== 'end');
+    const fromIdx = reorderable.findIndex((i) => i.id === draggedId);
+    const toIdx = reorderable.findIndex((i) => i.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const next = reorderable.slice();
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    persistOrder(next);
   }
 
   async function addNext(group: string, baseLabel: string) {
@@ -94,38 +165,176 @@ function TaskChecklistBlock({
       {task.task_name && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 }}>{task.task_name}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
-        {items.map((item) => (
-          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px' }}>
-            <button
-              onClick={() => toggle(item)}
-              style={{
-                width: 18,
-                height: 18,
-                flexShrink: 0,
-                borderRadius: 5,
-                border: '1.5px solid ' + (item.checked ? 'var(--accent)' : 'var(--border)'),
-                background: item.checked ? 'var(--accent)' : 'transparent',
-                cursor: canEdit ? 'pointer' : 'default',
-                padding: 0
-              }}
-              aria-label={item.label}
-            >
-              {item.checked && <span style={{ color: 'var(--accent-contrast)', fontSize: 11 }}>✓</span>}
-            </button>
-            <span style={{ flexGrow: 1, fontSize: 13, textDecoration: item.checked ? 'line-through' : 'none' }}>
-              {item.label}
-            </span>
-            {canEdit && item.item_group !== 'end' && (
-              <button
-                onClick={() => deleteItem(item)}
-                aria-label="Xoá đầu việc này"
-                style={{ border: 'none', background: 'transparent', color: '#C63C3C', cursor: 'pointer', fontSize: 12 }}
+        {items.map((item) => {
+          const reorderable = canEdit && item.item_group !== 'end';
+          const isEditing = editingId === item.id;
+          const isDeadlineEditing = deadlineEditingId === item.id;
+          const isDragOver = dragOverId === item.id && dragItemId !== item.id;
+          return (
+            <div key={item.id}>
+              <div
+                onDragOver={(e) => {
+                  if (!reorderable || !dragItemId) return;
+                  e.preventDefault();
+                  if (dragOverId !== item.id) setDragOverId(item.id);
+                }}
+                onDrop={(e) => {
+                  if (!reorderable) return;
+                  e.preventDefault();
+                  handleDrop(item.id);
+                }}
+                onDragLeave={() => {
+                  if (dragOverId === item.id) setDragOverId(null);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 4px',
+                  borderRadius: 6,
+                  borderTop: isDragOver ? '2px solid var(--accent)' : '2px solid transparent'
+                }}
               >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
+                {reorderable ? (
+                  <span
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDragItemId(item.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragItemId(null);
+                      setDragOverId(null);
+                    }}
+                    aria-label="Kéo để đổi thứ tự"
+                    title="Kéo để đổi thứ tự"
+                    style={{ flexShrink: 0, fontSize: 12, color: 'var(--muted-2)', cursor: 'grab', lineHeight: 1 }}
+                  >
+                    ≡
+                  </span>
+                ) : (
+                  <span style={{ width: 12, flexShrink: 0 }} />
+                )}
+                <button
+                  onClick={() => toggle(item)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    flexShrink: 0,
+                    borderRadius: 5,
+                    border: '1.5px solid ' + (item.checked ? 'var(--accent)' : 'var(--border)'),
+                    background: item.checked ? 'var(--accent)' : 'transparent',
+                    cursor: canEdit ? 'pointer' : 'default',
+                    padding: 0
+                  }}
+                  aria-label={item.label}
+                >
+                  {item.checked && <span style={{ color: 'var(--accent-contrast)', fontSize: 11 }}>✓</span>}
+                </button>
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+                      if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                    }}
+                    style={{ flexGrow: 1, fontSize: 13, height: 26, padding: '0 6px', borderRadius: 6, border: '1px solid var(--border)' }}
+                  />
+                ) : (
+                  <span style={{ flexGrow: 1, fontSize: 13, textDecoration: item.checked ? 'line-through' : 'none' }}>
+                    {item.label}
+                  </span>
+                )}
+
+                {isEditing ? (
+                  <>
+                    <button
+                      onClick={saveEdit}
+                      aria-label="Lưu tên đầu việc"
+                      style={{ border: 'none', background: 'transparent', color: '#2E7D32', cursor: 'pointer', fontSize: 13 }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      aria-label="Huỷ đổi tên"
+                      style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                ) : (
+                  canEdit && item.item_group !== 'end' && (
+                    <>
+                      <button
+                        onClick={() => startDeadline(item)}
+                        aria-label="Đặt deadline dự kiến"
+                        title={item.deadline ? `Deadline dự kiến: ${item.deadline}` : 'Đặt deadline dự kiến'}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: item.deadline ? 'var(--accent)' : 'var(--muted)',
+                          cursor: 'pointer',
+                          fontSize: 12.5
+                        }}
+                      >
+                        📅
+                      </button>
+                      <button
+                        onClick={() => startEdit(item)}
+                        aria-label="Sửa tên đầu việc"
+                        style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12.5 }}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => deleteItem(item)}
+                        aria-label="Xoá đầu việc này"
+                        style={{ border: 'none', background: 'transparent', color: '#C63C3C', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        ✕
+                      </button>
+                    </>
+                  )
+                )}
+              </div>
+
+              {isDeadlineEditing && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 6px 32px' }}>
+                  <input
+                    type="date"
+                    autoFocus
+                    value={deadlineDraft}
+                    onChange={(e) => setDeadlineDraft(e.target.value)}
+                    style={{ fontSize: 12.5, height: 28, padding: '0 6px', borderRadius: 6, border: '1px solid var(--border)' }}
+                  />
+                  <button
+                    onClick={() => saveDeadline(item)}
+                    style={{ height: 28, padding: '0 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'var(--accent-contrast)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Lưu
+                  </button>
+                  {item.deadline && (
+                    <button
+                      onClick={() => clearDeadline(item)}
+                      style={{ height: 28, padding: '0 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#C63C3C', fontSize: 11.5, cursor: 'pointer' }}
+                    >
+                      Xoá
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDeadlineEditingId(null)}
+                    style={{ height: 28, padding: '0 8px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer' }}
+                  >
+                    Đóng
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
         {items.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-2)' }}>Chưa có checklist.</div>}
       </div>
 

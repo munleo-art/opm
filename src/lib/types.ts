@@ -44,6 +44,9 @@ export interface ChecklistItem {
   checked: boolean;
   item_group: string;
   sort_order: number;
+  // Deadline dự kiến riêng cho từng đầu việc nhỏ trong checklist — chỉ hiện khi bấm vào icon lịch
+  // trong modal chi tiết, KHÔNG dùng để tính/tô màu ngoài Dashboard.
+  deadline: string | null;
 }
 
 export interface Task {
