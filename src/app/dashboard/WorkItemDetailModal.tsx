@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import type { Task, Brief, Staff, ChecklistItem } from '../../lib/types';
 import { canEditTaskChecklist, canManageBriefs } from '../../lib/permissions';
@@ -11,6 +11,12 @@ const INCREMENTABLE_GROUPS: Record<string, string> = {
   build: 'Check bản dựng TVC',
   dung: 'Dựng'
 };
+
+// "2026-10-05" -> "05/10/2026" — hiển thị kiểu ngày/tháng/năm quen thuộc thay vì ISO.
+function formatVNDate(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
 
 function TaskChecklistBlock({
   task,
@@ -46,9 +52,10 @@ function TaskChecklistBlock({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
-  // Deadline dự kiến riêng cho từng đầu việc (icon lịch) — chỉ hiện khi bấm vào, không hiện mặc định.
-  const [deadlineEditingId, setDeadlineEditingId] = useState<string | null>(null);
-  const [deadlineDraft, setDeadlineDraft] = useState('');
+  // Deadline dự kiến riêng cho từng đầu việc (icon lịch) — chọn bằng lịch popup có sẵn của
+  // trình duyệt (không gõ tay), và khi đã chọn thì hiện luôn thành 1 nút ngày ngay cạnh đầu việc
+  // để dễ theo dõi (không ẩn đi). Bấm lại vào nút đó để mở lịch đổi ngày khác.
+  const dateInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Kéo-thả đổi thứ tự (icon 3 gạch ngang). "Hoàn thành"/"Hoàn thiện" (item_group 'end') luôn
   // bị loại khỏi danh sách có thể kéo và luôn được ghép lại ở cuối cùng sau khi lưu thứ tự mới.
@@ -68,7 +75,6 @@ function TaskChecklistBlock({
   }
 
   function startEdit(item: ChecklistItem) {
-    setDeadlineEditingId(null);
     setEditingId(item.id);
     setEditDraft(item.label);
   }
@@ -83,21 +89,18 @@ function TaskChecklistBlock({
     onRefetch();
   }
 
-  function startDeadline(item: ChecklistItem) {
-    setEditingId(null);
-    setDeadlineEditingId(item.id);
-    setDeadlineDraft(item.deadline ?? '');
+  function openDatePicker(itemId: string) {
+    const el = dateInputRefs.current[itemId];
+    if (!el) return;
+    if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === 'function') {
+      (el as HTMLInputElement & { showPicker: () => void }).showPicker();
+    } else {
+      el.focus();
+    }
   }
 
-  async function saveDeadline(item: ChecklistItem) {
-    setDeadlineEditingId(null);
-    await supabase.from('checklist_items').update({ deadline: deadlineDraft || null }).eq('id', item.id);
-    onRefetch();
-  }
-
-  async function clearDeadline(item: ChecklistItem) {
-    setDeadlineEditingId(null);
-    await supabase.from('checklist_items').update({ deadline: null }).eq('id', item.id);
+  async function onDeadlineChange(item: ChecklistItem, value: string) {
+    await supabase.from('checklist_items').update({ deadline: value || null }).eq('id', item.id);
     onRefetch();
   }
 
@@ -168,7 +171,6 @@ function TaskChecklistBlock({
         {items.map((item) => {
           const reorderable = canEdit && item.item_group !== 'end';
           const isEditing = editingId === item.id;
-          const isDeadlineEditing = deadlineEditingId === item.id;
           const isDragOver = dragOverId === item.id && dragItemId !== item.id;
           return (
             <div key={item.id}>
@@ -268,20 +270,59 @@ function TaskChecklistBlock({
                 ) : (
                   canEdit && item.item_group !== 'end' && (
                     <>
-                      <button
-                        onClick={() => startDeadline(item)}
-                        aria-label="Đặt deadline dự kiến"
-                        title={item.deadline ? `Deadline dự kiến: ${item.deadline}` : 'Đặt deadline dự kiến'}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          color: item.deadline ? 'var(--accent)' : 'var(--muted)',
-                          cursor: 'pointer',
-                          fontSize: 12.5
-                        }}
-                      >
-                        📅
-                      </button>
+                      <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                        {item.deadline ? (
+                          <button
+                            onClick={() => openDatePicker(item.id)}
+                            aria-label="Đổi deadline dự kiến"
+                            title="Bấm để đổi deadline"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              border: '1px solid var(--border)',
+                              background: 'var(--chip)',
+                              color: 'var(--text)',
+                              borderRadius: 999,
+                              padding: '2px 8px 2px 6px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            📅 {formatVNDate(item.deadline)}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openDatePicker(item.id)}
+                            aria-label="Đặt deadline dự kiến"
+                            title="Đặt deadline dự kiến"
+                            style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12.5 }}
+                          >
+                            📅
+                          </button>
+                        )}
+                        <input
+                          ref={(el) => {
+                            dateInputRefs.current[item.id] = el;
+                          }}
+                          type="date"
+                          value={item.deadline ?? ''}
+                          onChange={(e) => onDeadlineChange(item, e.target.value)}
+                          tabIndex={-1}
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            opacity: 0,
+                            border: 'none',
+                            padding: 0,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                      </span>
                       <button
                         onClick={() => startEdit(item)}
                         aria-label="Sửa tên đầu việc"
@@ -300,38 +341,6 @@ function TaskChecklistBlock({
                   )
                 )}
               </div>
-
-              {isDeadlineEditing && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 6px 32px' }}>
-                  <input
-                    type="date"
-                    autoFocus
-                    value={deadlineDraft}
-                    onChange={(e) => setDeadlineDraft(e.target.value)}
-                    style={{ fontSize: 12.5, height: 28, padding: '0 6px', borderRadius: 6, border: '1px solid var(--border)' }}
-                  />
-                  <button
-                    onClick={() => saveDeadline(item)}
-                    style={{ height: 28, padding: '0 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'var(--accent-contrast)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Lưu
-                  </button>
-                  {item.deadline && (
-                    <button
-                      onClick={() => clearDeadline(item)}
-                      style={{ height: 28, padding: '0 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#C63C3C', fontSize: 11.5, cursor: 'pointer' }}
-                    >
-                      Xoá
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setDeadlineEditingId(null)}
-                    style={{ height: 28, padding: '0 8px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer' }}
-                  >
-                    Đóng
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}
