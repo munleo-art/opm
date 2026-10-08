@@ -32,6 +32,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <ThemeProvider>{children}</ThemeProvider>
+        <div
+          style={{
+            position: 'fixed',
+            right: 10,
+            bottom: 'max(8px, env(safe-area-inset-bottom))',
+            fontSize: 10,
+            lineHeight: 1.3,
+            color: 'var(--muted-2)',
+            background: 'rgba(255,255,255,0.85)',
+            padding: '2px 6px',
+            borderRadius: 6,
+            pointerEvents: 'none',
+            zIndex: 40,
+            maxWidth: 'calc(100vw - 20px)',
+            textAlign: 'right'
+          }}
+        >
+          Phát triển bởi Ban Sáng tạo Media - ODE
+        </div>
       </body>
     </html>
   );
