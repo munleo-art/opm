@@ -20,7 +20,10 @@ export function canAddProject(me: Staff | null): boolean {
 export function canManageAnyTask(me: Staff | null): boolean {
   if (!me) return false;
   if (me.permission === 'Admin') return true;
-  return isLeadOrSpecialist(me) && !isMarketingDept(me);
+  // Trước đây loại trừ Ban Marketing (chỉ các ban khác mới sửa được đầu việc dự án). Theo yêu
+  // cầu của anh, Cấp lãnh đạo/Cấp chuyên viên Ban Marketing giờ có quyền y hệt các ban khác:
+  // sửa tên/deadline/4 ô nhân sự, thêm/xoá đầu việc trong "DANH SÁCH CÔNG VIỆC" của dự án.
+  return isLeadOrSpecialist(me);
 }
 
 export function canManageBriefs(me: Staff | null): boolean {
