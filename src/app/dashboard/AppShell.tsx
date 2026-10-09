@@ -129,6 +129,7 @@ export default function AppShell() {
         }}
       >
         <div
+          className="m-pad"
           style={{
             maxWidth: 1100,
             margin: '0 auto',
@@ -136,18 +137,22 @@ export default function AppShell() {
             height: 64,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            gap: 10
           }}
         >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1, whiteSpace: 'nowrap' }}>
               ODE PROJECT MANAGER
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              {me?.name} · {me?.department?.name} · {me?.permission}
+            <div
+              style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+            >
+              {me?.name} · {me?.department?.name}
+              <span className="m-hide"> · {me?.permission}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <NotificationBell
               notifications={notifications}
               onOpenProject={(projectId) => {
@@ -155,7 +160,10 @@ export default function AppShell() {
               }}
               onRefetch={fetchAll}
             />
-            <ThemeControls />
+            {/* Trên điện thoại: chỉnh giao diện + Đăng xuất nằm trong trang Tài khoản (bấm avatar) cho header gọn */}
+            <span className="m-hide" style={{ display: 'contents' }}>
+              <ThemeControls />
+            </span>
             <button
               onClick={() => setActiveTab('taikhoan')}
               aria-label="Tài khoản"
@@ -170,10 +178,13 @@ export default function AppShell() {
             >
               <Avatar me={me} size={38} />
             </button>
-            <LogoutButton />
+            <span className="m-hide" style={{ display: 'contents' }}>
+              <LogoutButton />
+            </span>
           </div>
         </div>
         <div
+          className="m-pad"
           style={{
             maxWidth: 1100,
             margin: '0 auto',
@@ -211,7 +222,8 @@ export default function AppShell() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px' }}>
+      <div className="ode-main" style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px' }}>
+        <style>{`@media (max-width: 640px) { .ode-main { padding: 16px 14px 8px !important; } }`}</style>
         {activeTab === 'dashboard' && (
           <DashboardTab
             projects={projects}

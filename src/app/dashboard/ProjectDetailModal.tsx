@@ -5,6 +5,7 @@ import { createClient } from '../../lib/supabase/client';
 import type { Project, Task, Staff } from '../../lib/types';
 import { canAddProject, canManageAnyTask, canEditTaskChecklist, visibleStaff } from '../../lib/permissions';
 import DatePicker from './DatePicker';
+import { useIsMobile } from '../../lib/useIsMobile';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const GROUP_OPTIONS = ['BĐS Miền Bắc', 'BĐS Miền Trung', 'BĐS Miền Nam', 'SSG', 'SCG', 'KLB'];
@@ -453,6 +454,7 @@ export default function ProjectDetailModal({
   const [linksTaskId, setLinksTaskId] = useState<string | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   async function saveProjectInfo() {
     if (!titleDraft.trim() || !groupDraft.trim()) return;
@@ -571,7 +573,61 @@ export default function ProjectDetailModal({
         <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>
           DANH SÁCH CÔNG VIỆC
         </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+        {isMobile && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+            {tasks.length === 0 && (
+              <div style={{ padding: 14, fontSize: 13.5, color: 'var(--muted)' }}>Chưa có đầu việc nào.</div>
+            )}
+            {tasks.map((t, i) => {
+              const people = [
+                ['MKT', t.mkt_assignee?.name],
+                ['TTTH', t.ttth_assignee?.name],
+                ['ST', t.st_assignee?.name],
+                ['Dựng', t.dung_assignee?.name]
+              ].filter(([, n]) => !!n) as [string, string][];
+              return (
+                <div
+                  key={t.id}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => setLinksTaskId(t.id)} role="button" tabIndex={0}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 14.5, fontWeight: 600, textDecoration: 'underline', wordBreak: 'break-word' }}>
+                        {t.task_name || '(chưa đặt tên)'}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                        {t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : 'Chưa có hạn'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginTop: 6, fontSize: 12.5 }}>
+                      {people.length === 0 ? (
+                        <span style={{ color: 'var(--muted)' }}>Chưa giao nhân sự</span>
+                      ) : (
+                        people.map(([label, name]) => (
+                          <span key={label}>
+                            <span style={{ color: 'var(--muted)', fontSize: 11, fontWeight: 700, marginRight: 4 }}>{label}</span>
+                            {name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  {canManageAnyTask(me) && (
+                    <button
+                      onClick={() => setEditTaskId(t.id)}
+                      aria-label="Sửa đầu việc"
+                      style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'transparent', cursor: 'pointer', fontSize: 15, width: 38, height: 38, flexShrink: 0 }}
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="m-hide" style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
           <div
             style={{
               display: 'grid',

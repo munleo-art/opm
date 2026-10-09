@@ -568,6 +568,7 @@ export default function ReportShell() {
         }}
       >
         <div
+          className="adm-header"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -652,7 +653,7 @@ export default function ReportShell() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 100px' }}>
+      <div className="adm-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 100px' }}>
         <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 600 }}>Báo cáo tổng hợp dự án</h1>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
           Tổng hợp tiến độ tất cả dự án, cập nhật theo thời gian thực từ Dashboard.
@@ -805,6 +806,7 @@ export default function ReportShell() {
 
         <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>
           <div
+            className="m-hide"
             style={{
               display: 'grid',
               gridTemplateColumns: '1.5fr 0.8fr 1.9fr 1fr 1.3fr 0.9fr 0.4fr',
@@ -836,6 +838,7 @@ export default function ReportShell() {
             return (
               <div key={s.project.id}>
                 <div
+                  className="rp-row"
                   onClick={() => setExpandedId(isExpanded ? null : s.project.id)}
                   style={{
                     display: 'grid',
@@ -889,6 +892,7 @@ export default function ReportShell() {
                     ) : (
                       <div style={{ marginTop: 8 }}>
                         <div
+                          className="m-hide"
                           style={{
                             display: 'grid',
                             gridTemplateColumns: '1.4fr 2fr 0.9fr 1fr',
@@ -912,6 +916,7 @@ export default function ReportShell() {
                           return (
                             <div
                               key={r.key}
+                              className="rp-sub"
                               style={{
                                 display: 'grid',
                                 gridTemplateColumns: '1.4fr 2fr 0.9fr 1fr',

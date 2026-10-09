@@ -6,6 +6,8 @@ import type { Staff } from '../../lib/types';
 import Avatar from './Avatar';
 import Link from 'next/link';
 import { canSeeAdmin } from '../../lib/permissions';
+import ThemeControls from './ThemeControls';
+import LogoutButton from './LogoutButton';
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
@@ -175,6 +177,25 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
           </Link>
         </div>
       )}
+      {/* Chỉ hiện trên điện thoại — header điện thoại đã ẩn 2 mục này cho gọn */}
+      <div
+        className="m-only"
+        style={{
+          marginTop: 24,
+          paddingTop: 18,
+          borderTop: '1px solid var(--border)',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>Giao diện</span>
+          <ThemeControls popAlign="left" />
+        </div>
+        <LogoutButton />
+      </div>
     </div>
   );
 }

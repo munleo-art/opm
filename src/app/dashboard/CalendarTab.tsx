@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Project, Task, Brief, Department, Staff } from '../../lib/types';
 import { buildRows, type WorkRow } from '../../lib/workRows';
 import WorkItemDetailModal from './WorkItemDetailModal';
+import { useIsMobile } from '../../lib/useIsMobile';
 
 type DeptKey = 'st' | 'mkt' | 'ttth' | 'dung';
 
@@ -207,6 +208,126 @@ function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date
   return weeks;
 }
 
+
+// ===== Lịch trên điện thoại: danh sách theo tuần, xếp theo HẠN CHÓT (không vẽ lưới 7 cột) =====
+
+interface AgendaWeek {
+  key: string;
+  start: Date;
+  end: Date;
+  isPast: boolean;
+  isCurrent: boolean;
+  items: RowRange[];
+}
+
+function buildAgenda(year: number, month: number, ranges: RowRange[], today: Date): AgendaWeek[] {
+  const firstOfMonth = new Date(year, month, 1);
+  const lastOfMonth = new Date(year, month + 1, 0);
+  const gridStart = addDays(firstOfMonth, -((firstOfMonth.getDay() + 6) % 7));
+  const gridEnd = addDays(lastOfMonth, 6 - ((lastOfMonth.getDay() + 6) % 7));
+  const result: AgendaWeek[] = [];
+  for (let ws = gridStart; ws.getTime() <= gridEnd.getTime(); ws = addDays(ws, 7)) {
+    const we = addDays(ws, 6);
+    const items = ranges
+      .filter((r) => r.end.getTime() >= ws.getTime() && r.end.getTime() <= we.getTime())
+      .sort((a, b) => a.end.getTime() - b.end.getTime() || a.row.project.title.localeCompare(b.row.project.title, 'vi'));
+    result.push({
+      key: `a${ws.getTime()}`,
+      start: ws,
+      end: we,
+      isPast: we.getTime() < today.getTime(),
+      isCurrent: today.getTime() >= ws.getTime() && today.getTime() <= we.getTime(),
+      items
+    });
+  }
+  return result;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const ddmm = (d: Date) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
+
+function MobileAgenda({
+  weeks,
+  today,
+  onOpen
+}: {
+  weeks: AgendaWeek[];
+  today: Date;
+  onOpen: (rowKey: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {weeks.map((w) => (
+        <div key={w.key}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, margin: '0 2px 8px' }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: w.isCurrent ? 'var(--text)' : 'var(--muted)' }}>
+              Tuần {ddmm(w.start)} – {ddmm(w.end)}
+              {w.isCurrent && (
+                <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--accent)', color: 'var(--accent-contrast)' }}>
+                  Tuần này
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{w.items.length} việc đến hạn</div>
+          </div>
+
+          {w.items.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--muted)', padding: '12px 14px', border: '1px dashed var(--border)', borderRadius: 12 }}>
+              Không có việc đến hạn.
+            </div>
+          ) : (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 14, background: 'var(--surface)', overflow: 'hidden' }}>
+              {w.items.map((it, i) => {
+                const isToday = isSameDay(it.end, today);
+                const overdue = !it.row.completed && it.end.getTime() < today.getTime();
+                const dow = WEEKDAY_LABELS[(it.end.getDay() + 6) % 7];
+                return (
+                  <div
+                    key={it.row.key}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpen(it.row.key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', cursor: 'pointer',
+                      borderTop: i === 0 ? 'none' : '1px solid var(--border)', opacity: it.row.completed ? 0.6 : 1
+                    }}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: colorForProject(it.row.project.id) }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 14, fontWeight: 600, lineHeight: 1.35, wordBreak: 'break-word',
+                          textDecoration: it.row.completed ? 'line-through' : 'none'
+                        }}
+                      >
+                        {it.row.completed ? '✓ ' : ''}
+                        {it.row.headline || '—'}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.35 }}>
+                        {it.row.project.title}
+                        {!isSameDay(it.start, it.end) && ` · từ ${ddmm(it.start)}`}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, lineHeight: 1.3,
+                        color: isToday || overdue ? '#C63C3C' : 'var(--text)'
+                      }}
+                    >
+                      <div>{isToday ? 'Hôm nay' : dow}</div>
+                      <div style={{ fontWeight: 500, color: isToday || overdue ? '#C63C3C' : 'var(--muted)' }}>{ddmm(it.end)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CalendarTab({
   projects,
   tasks,
@@ -233,6 +354,7 @@ export default function CalendarTab({
   const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(new Set());
   // Tuần đã qua mặc định ẩn; bấm nút "Hiện tuần đã qua" để xem lại.
   const [showPastWeeks, setShowPastWeeks] = useState(false);
+  const isMobile = useIsMobile();
 
   const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
 
@@ -272,6 +394,8 @@ export default function CalendarTab({
   const weeks = useMemo(() => buildWeeks(year, month, visibleRanges, today), [year, month, visibleRanges, today]);
   const pastWeekCount = weeks.filter((w) => w.isPast).length;
   const shownWeeks = showPastWeeks ? weeks : weeks.filter((w) => !w.isPast);
+  const agendaWeeks = useMemo(() => buildAgenda(year, month, visibleRanges, today), [year, month, visibleRanges, today]);
+  const shownAgendaWeeks = showPastWeeks ? agendaWeeks : agendaWeeks.filter((w) => !w.isPast);
 
   function toggleProject(id: string) {
     setHiddenProjectIds((prev) => {
@@ -302,8 +426,67 @@ export default function CalendarTab({
     setSelectedStaffId('');
   }
 
+  const mBtn: React.CSSProperties = {
+    height: 40, minWidth: 40, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 11,
+    background: 'var(--surface)', color: 'var(--text)', fontSize: 14, fontWeight: 600, cursor: 'pointer'
+  };
+  const mSelect: React.CSSProperties = {
+    flex: 1, minWidth: 0, height: 44, padding: '0 10px', borderRadius: 11, border: '1px solid var(--border)',
+    background: 'var(--surface)', color: 'var(--text)'
+  };
+  const teamStaff = allStaff.filter((st) => st.department?.name === DEPT_OPTIONS.find((d) => d.key === selectedTeam)?.deptName);
+
   return (
     <div>
+      {isMobile && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Lịch</h1>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Xếp theo hạn chót</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <button onClick={prevMonth} aria-label="Tháng trước" style={mBtn}>‹</button>
+            <div style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 700 }}>{monthLabel}</div>
+            <button onClick={nextMonth} aria-label="Tháng sau" style={mBtn}>›</button>
+            <button onClick={goToday} style={mBtn}>Hôm nay</button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <select value={selectedTeam} onChange={(e) => selectTeam(e.target.value as DeptKey)} style={mSelect}>
+              {DEPT_OPTIONS.map((d) => (
+                <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+            <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} style={mSelect}>
+              <option value="">Cả team</option>
+              {teamStaff.map((st) => (
+                <option key={st.id} value={st.id}>{st.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {agendaWeeks.some((w) => w.isPast) && (
+            <button
+              onClick={() => setShowPastWeeks((v) => !v)}
+              style={{ ...mBtn, width: '100%', marginBottom: 14, fontSize: 13.5, background: showPastWeeks ? 'var(--chip)' : 'var(--surface)' }}
+            >
+              {showPastWeeks ? 'Ẩn tuần đã qua' : `Hiện tuần đã qua (${agendaWeeks.filter((w) => w.isPast).length})`}
+            </button>
+          )}
+
+          {shownAgendaWeeks.length === 0 ? (
+            <div style={{ padding: '28px 8px', textAlign: 'center', fontSize: 14, color: 'var(--muted)' }}>
+              Tất cả các tuần của tháng này đã qua.
+            </div>
+          ) : (
+            <MobileAgenda weeks={shownAgendaWeeks} today={today} onOpen={setSelectedRowKey} />
+          )}
+        </div>
+      )}
+
+      {!isMobile && (
+      <>
       <div
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap'
@@ -533,6 +716,8 @@ export default function CalendarTab({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {selectedRow && (
         <WorkItemDetailModal

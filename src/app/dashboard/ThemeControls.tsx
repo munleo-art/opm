@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useTheme, ACCENT_SWATCHES } from '../../lib/ThemeProvider';
 
-export default function ThemeControls() {
+// popAlign='left' khi nút nằm bên trái màn hình (trang Tài khoản trên điện thoại) để bảng màu không tràn ra ngoài.
+export default function ThemeControls({ popAlign = 'right' }: { popAlign?: 'left' | 'right' } = {}) {
   const { mode, accentKey, toggleMode, setAccentKey } = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -34,7 +35,7 @@ export default function ThemeControls() {
               style={{
                 position: 'absolute',
                 top: 46,
-                right: 0,
+                ...(popAlign === 'left' ? { left: 0 } : { right: 0 }),
                 width: 220,
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',

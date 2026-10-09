@@ -81,6 +81,7 @@ export default function NotificationBell({
 
       {open && (
         <div
+          className="ode-bell-pop"
           style={{
             position: 'absolute',
             top: 46,

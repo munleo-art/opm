@@ -125,6 +125,7 @@ export default function AdminShell() {
         }}
       >
         <div
+          className="adm-header"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -175,7 +176,7 @@ export default function AdminShell() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 100px' }}>
+      <div className="adm-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 100px' }}>
         <div
           style={{
             display: 'flex',
@@ -228,6 +229,7 @@ export default function AdminShell() {
             </div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>
               <div
+                className="m-hide"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: gridCols,
@@ -250,6 +252,7 @@ export default function AdminShell() {
               {g.rows.map((st) => (
                 <div
                   key={st.id}
+                  className="adm-row"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: gridCols,
