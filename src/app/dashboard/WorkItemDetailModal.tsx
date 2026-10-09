@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import type { Task, Brief, Staff, ChecklistItem } from '../../lib/types';
 import { canEditTaskChecklist, canManageBriefs } from '../../lib/permissions';
@@ -663,6 +663,60 @@ function CompletionSection({
   );
 }
 
+
+// "2026-10-09T07:05:00Z" -> "09/10/2026 14:05" (giờ Việt Nam) — cho dòng "Tạo bởi ... lúc ...".
+function formatVNDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((x) => x.type === t)?.value ?? '';
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`;
+}
+
+// Ai tạo đầu việc này và lúc nào: dòng có brief → người đăng brief; dòng không có brief → task
+// đứng sau dòng đó (hoặc task được tạo sớm nhất). Tên người tạo được tra từ bảng staff.
+function CreatedByLine({ brief, tasks }: { brief: Brief | null; tasks: Task[] }) {
+  const source = brief
+    ? { id: brief.posted_by, at: brief.posted_at, name: brief.poster?.name ?? null }
+    : (() => {
+        const t = tasks
+          .filter(Boolean)
+          .slice()
+          .sort((x, y) => (x.created_at || '').localeCompare(y.created_at || ''))[0];
+        return t ? { id: t.created_by, at: t.created_at, name: null as string | null } : null;
+      })();
+
+  const [name, setName] = useState<string | null>(source?.name ?? null);
+
+  useEffect(() => {
+    if (!source?.id || source.name) return;
+    let cancelled = false;
+    createClient()
+      .from('staff')
+      .select('name')
+      .eq('id', source.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.name) setName(data.name);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source?.id]);
+
+  if (!source || (!source.at && !source.id)) return null;
+  const when = source.at ? formatVNDateTime(source.at) : '';
+  return (
+    <span style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 400 }}>
+      Tạo bởi {name ?? '—'}
+      {when ? ` · ${when}` : ''}
+    </span>
+  );
+}
+
 export default function WorkItemDetailModal({
   headline,
   brief,
@@ -705,8 +759,14 @@ export default function WorkItemDetailModal({
           zIndex: 141
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{headline}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 10, rowGap: 2 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{headline}</h3>
+            <CreatedByLine
+              brief={brief}
+              tasks={[backingTask, primaryTask].filter(Boolean).length ? ([backingTask ?? primaryTask] as Task[]) : [...stTasks, ...dungTasks]}
+            />
+          </div>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 16, cursor: 'pointer' }}>
             ✕
           </button>

@@ -244,7 +244,7 @@ function buildStaffWorkload(rows: WorkRow[], allStaff: Staff[], deptKey: DeptKey
 
 const WORKLOAD_PALETTE = ['#4F7CFF', '#2E7D32', '#C2760B', '#C63C3C', '#7C4DFF', '#00897B', '#AD1457', '#5D4037', '#546E7A', '#00ACC1'];
 
-function WorkloadDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
+function WorkloadDonut({ data }: { data: { label: string; value: number; total: number; color: string }[] }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) {
     return <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Chưa có ai đang cầm việc mở trong ban này.</div>;
@@ -289,7 +289,10 @@ function WorkloadDonut({ data }: { data: { label: string; value: number; color: 
           <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
             <span style={{ flex: 1 }}>{d.label}</span>
-            <span style={{ fontWeight: 700 }}>{d.value}</span>
+            <span style={{ whiteSpace: 'nowrap' }} title={`Đang mở ${d.value} / tổng ${d.total} việc được giao`}>
+              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{d.value}</span>
+              <span style={{ color: 'var(--muted)', fontWeight: 400 }}>/{d.total}</span>
+            </span>
             <span style={{ color: 'var(--muted)', fontSize: 11, minWidth: 34, textAlign: 'right' }}>
               {Math.round((d.value / total) * 100)}%
             </span>
@@ -385,7 +388,7 @@ export default function ReportShell() {
     () =>
       workload
         .filter((w) => w.open > 0)
-        .map((w, i) => ({ label: w.staff.name, value: w.open, color: WORKLOAD_PALETTE[i % WORKLOAD_PALETTE.length] })),
+        .map((w, i) => ({ label: w.staff.name, value: w.open, total: w.open + w.done, color: WORKLOAD_PALETTE[i % WORKLOAD_PALETTE.length] })),
     [workload]
   );
 

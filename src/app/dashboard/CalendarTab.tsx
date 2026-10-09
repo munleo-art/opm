@@ -125,6 +125,8 @@ interface WeekData {
   days: DayCell[];
   bars: Bar[];
   laneCount: number;
+  // Tuần đã kết thúc trước hôm nay (CN của tuần < hôm nay) — mặc định ẩn ở tab Lịch.
+  isPast: boolean;
 }
 
 function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date): WeekData[] {
@@ -199,7 +201,7 @@ function buildWeeks(year: number, month: number, ranges: RowRange[], today: Date
     const laneCount = Math.max(usedLanes, 1);
     const weekHeight = 30 + laneCount * LANE_HEIGHT + 10;
 
-    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, laneCount });
+    weeks.push({ key: `w${w}`, height: weekHeight, days, bars, laneCount, isPast: weekEnd.getTime() < today.getTime() });
   }
 
   return weeks;
@@ -229,6 +231,8 @@ export default function CalendarTab({
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
   const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(new Set());
+  // Tuần đã qua mặc định ẩn; bấm nút "Hiện tuần đã qua" để xem lại.
+  const [showPastWeeks, setShowPastWeeks] = useState(false);
 
   const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
 
@@ -266,6 +270,8 @@ export default function CalendarTab({
   );
 
   const weeks = useMemo(() => buildWeeks(year, month, visibleRanges, today), [year, month, visibleRanges, today]);
+  const pastWeekCount = weeks.filter((w) => w.isPast).length;
+  const shownWeeks = showPastWeeks ? weeks : weeks.filter((w) => !w.isPast);
 
   function toggleProject(id: string) {
     setHiddenProjectIds((prev) => {
@@ -331,6 +337,19 @@ export default function CalendarTab({
             style={{ height: 36, padding: '0 14px', border: '1px solid var(--border)', borderRadius: 9, background: 'var(--surface)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', marginLeft: 6 }}
           >
             Hôm nay
+          </button>
+          <button
+            onClick={() => setShowPastWeeks((v) => !v)}
+            disabled={pastWeekCount === 0}
+            title={pastWeekCount === 0 ? 'Tháng này chưa có tuần nào đã qua' : undefined}
+            style={{
+              height: 36, padding: '0 14px', border: '1px solid var(--border)', borderRadius: 9,
+              background: showPastWeeks ? 'var(--chip)' : 'var(--surface)',
+              cursor: pastWeekCount === 0 ? 'default' : 'pointer', opacity: pastWeekCount === 0 ? 0.5 : 1,
+              fontSize: 12.5, fontWeight: 600, color: 'var(--text)'
+            }}
+          >
+            {showPastWeeks ? 'Ẩn tuần đã qua' : `Hiện tuần đã qua${pastWeekCount > 0 ? ` (${pastWeekCount})` : ''}`}
           </button>
         </div>
       </div>
@@ -430,7 +449,18 @@ export default function CalendarTab({
                 ))}
               </div>
 
-              {weeks.map((week) => (
+              {shownWeeks.length === 0 && (
+                <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: 13, color: 'var(--muted)', borderTop: '1px solid var(--border)' }}>
+                  Tất cả các tuần của tháng này đã qua.{' '}
+                  <button
+                    onClick={() => setShowPastWeeks(true)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', fontSize: 13, padding: 0 }}
+                  >
+                    Hiện tuần đã qua
+                  </button>
+                </div>
+              )}
+              {shownWeeks.map((week) => (
                 <div key={week.key} style={{ position: 'relative', minHeight: week.height, borderTop: '1px solid var(--border)' }}>
                   <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
                     {week.days.map((day) => (
