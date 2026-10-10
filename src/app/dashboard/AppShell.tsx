@@ -10,13 +10,14 @@ import AccountTab from './AccountTab';
 import ThemeControls from './ThemeControls';
 import DashboardTab from './DashboardTab';
 import CalendarTab from './CalendarTab';
+import NotesTab from './NotesTab';
 import ProjectsTab from './ProjectsTab';
 import BriefTab from './BriefTab';
 import ProjectDetailModal from './ProjectDetailModal';
 import AddProjectModal from './AddProjectModal';
 import { canAddProject, visibleStaff } from '../../lib/permissions';
 
-export type TabKey = 'dashboard' | 'calendar' | 'duan' | 'brief' | 'taikhoan';
+export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'duan' | 'brief' | 'taikhoan';
 
 export default function AppShell() {
   const supabase = createClient();
@@ -196,7 +197,8 @@ export default function AppShell() {
           {(
             [
               ['dashboard', 'DASHBOARD'],
-              ['calendar', 'LỊCH']
+              ['calendar', 'LỊCH'],
+              ['ghichu', 'GHI CHÚ']
               // Tạm ẩn tab DỰ ÁN và BRIEF theo yêu cầu — logic/route vẫn giữ nguyên bên dưới, chỉ ẩn nút điều hướng.
             ] as [TabKey, string][]
           ).map(([key, label]) => (
@@ -236,6 +238,7 @@ export default function AppShell() {
             onRefetch={fetchAll}
           />
         )}
+        {activeTab === 'ghichu' && <NotesTab me={me} />}
         {activeTab === 'calendar' && (
           <CalendarTab
             projects={projects}
