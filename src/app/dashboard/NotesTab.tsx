@@ -6,7 +6,7 @@ import type { Staff } from '../../lib/types';
 
 // Tab GHI CHÚ — mỗi team một bảng ghi chú riêng.
 // Quyền nằm ở database (RLS bảng team_notes): chỉ đọc được ghi chú của chính team mình,
-// kể cả Admin / Cấp lãnh đạo cũng không xem được team khác. Chỉ người đăng được sửa / xoá.
+// kể cả Admin / Cấp lãnh đạo cũng không xem được team khác. Ai trong team cũng sửa / xoá được.
 
 interface TeamNote {
   id: string;
@@ -15,6 +15,7 @@ interface TeamNote {
   updated_at: string | null;
   created_by: string;
   author?: { id: string; name: string } | null;
+  editor?: { id: string; name: string } | null;
 }
 
 // Màu giấy ghi chú pastel, cố định theo id để mỗi tờ giữ nguyên màu.
@@ -164,7 +165,7 @@ export default function NotesTab({ me }: { me: Staff | null }) {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('team_notes')
-      .select('id, content, created_at, updated_at, created_by, author:staff!team_notes_created_by_fkey(id, name)')
+      .select('id, content, created_at, updated_at, created_by, author:staff!team_notes_created_by_fkey(id, name), editor:staff!team_notes_updated_by_fkey(id, name)')
       .order('created_at', { ascending: false });
     if (error) {
       setLoadError('Không tải được ghi chú. Vui lòng thử lại.');
@@ -250,7 +251,6 @@ export default function NotesTab({ me }: { me: Staff | null }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16, alignItems: 'start' }}>
           {notes.map((n) => {
             const paper = paperFor(n.id);
-            const mine = !!me && n.created_by === me.id;
             return (
               <div
                 key={n.id}
@@ -267,9 +267,13 @@ export default function NotesTab({ me }: { me: Staff | null }) {
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.45, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: 'var(--text)' }}>{n.author?.name ?? '—'}</div>
                     <div>{formatStamp(n.created_at)}</div>
-                    {n.updated_at && <div style={{ fontStyle: 'italic' }}>Đã sửa {formatStamp(n.updated_at)}</div>}
+                    {n.updated_at && (
+                      <div style={{ fontStyle: 'italic' }}>
+                        Đã sửa{n.editor?.name && n.editor.id !== n.created_by ? ` bởi ${n.editor.name}` : ''} · {formatStamp(n.updated_at)}
+                      </div>
+                    )}
                   </div>
-                  {mine && (
+                  {!!me && (
                     <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                       <button
                         onClick={() => {
