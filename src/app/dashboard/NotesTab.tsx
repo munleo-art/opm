@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import type { Staff } from '../../lib/types';
+import { MAX_NOTE_LENGTH, editorHtmlToStored, noteDisplayHtml, noteToHtml, sanitizeNoteHtml } from '../../lib/noteRichText';
 
 // Tab GHI CHÚ — mỗi team một bảng ghi chú riêng.
 // Quyền nằm ở database (RLS bảng team_notes): chỉ đọc được ghi chú của chính team mình,
@@ -114,6 +115,138 @@ function ColorPicker({ value, onChange }: { value: ColorKey; onChange: (k: Color
   );
 }
 
+
+type FormatCmd = 'bold' | 'italic' | 'underline' | 'strikeThrough' | 'insertOrderedList' | 'insertUnorderedList';
+const FORMAT_BUTTONS: { cmd: FormatCmd; label: React.ReactNode; title: string }[] = [
+  { cmd: 'bold', label: <b>B</b>, title: 'In đậm (Ctrl+B)' },
+  { cmd: 'italic', label: <i style={{ fontFamily: 'Georgia, serif' }}>I</i>, title: 'In nghiêng (Ctrl+I)' },
+  { cmd: 'underline', label: <u>U</u>, title: 'Gạch chân (Ctrl+U)' },
+  { cmd: 'strikeThrough', label: <s>S</s>, title: 'Gạch ngang chữ' },
+  { cmd: 'insertOrderedList', label: '1.', title: 'Danh sách số (hoặc gõ "1. " đầu dòng)' },
+  { cmd: 'insertUnorderedList', label: '•', title: 'Gạch đầu dòng (hoặc gõ "- " đầu dòng)' }
+];
+
+// CSS dùng chung cho nội dung ghi chú (ô soạn + hiển thị)
+const RICH_CSS = `
+.note-rich { word-break: break-word; }
+.note-rich ul, .note-rich ol { margin: 4px 0; padding-left: 22px; }
+.note-rich li { margin: 2px 0; }
+.note-rich a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; word-break: break-all; }
+.note-rich div { min-height: 1em; }
+.note-editor:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+`;
+
+function RichEditor({ initialHtml, onChange }: { initialHtml: string; onChange: (html: string, text: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = initialHtml;
+      onChange(ref.current.innerHTML, ref.current.innerText);
+    }
+    // Khi xuống dòng tạo thẻ <div> (nhất quán giữa các trình duyệt)
+    try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch { /* bỏ qua */ }
+    const onSel = () => {
+      const sel = document.getSelection();
+      if (!sel || !ref.current || !sel.anchorNode || !ref.current.contains(sel.anchorNode)) return;
+      const next: Record<string, boolean> = {};
+      FORMAT_BUTTONS.forEach((b) => {
+        try { next[b.cmd] = document.queryCommandState(b.cmd); } catch { next[b.cmd] = false; }
+      });
+      setActive(next);
+    };
+    document.addEventListener('selectionchange', onSel);
+    return () => document.removeEventListener('selectionchange', onSel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const emit = () => {
+    if (ref.current) onChange(ref.current.innerHTML, ref.current.innerText);
+  };
+
+  function run(cmd: FormatCmd) {
+    ref.current?.focus();
+    document.execCommand(cmd, false);
+    emit();
+    try { setActive((a) => ({ ...a, [cmd]: document.queryCommandState(cmd) })); } catch { /* bỏ qua */ }
+  }
+
+  // Gõ "1. " / "1) " hoặc "- " / "* " / "• " ở đầu dòng → tự chuyển thành danh sách.
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== ' ') return;
+    const sel = document.getSelection();
+    if (!sel || !sel.isCollapsed || !sel.anchorNode || sel.anchorNode.nodeType !== Node.TEXT_NODE) return;
+    const node = sel.anchorNode as Text;
+    const before = (node.textContent ?? '').slice(0, sel.anchorOffset);
+    const isOrdered = /^\d+[.)]$/.test(before);
+    const isBullet = /^[-*•]$/.test(before);
+    if (!isOrdered && !isBullet) return;
+    const prev = node.previousSibling;
+    if (prev && !(prev.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).tagName === 'BR')) return;
+    if (node.parentElement?.closest('li')) return;
+    e.preventDefault();
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, sel.anchorOffset);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand('delete', false);
+    document.execCommand(isOrdered ? 'insertOrderedList' : 'insertUnorderedList', false);
+    emit();
+  }
+
+  // Dán: chỉ lấy chữ (bỏ định dạng/màu lạ từ nơi khác); link sẽ tự thành đường dẫn khi lưu.
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+    emit();
+  }
+
+  const btn = (on: boolean): React.CSSProperties => ({
+    minWidth: 38, height: 36, padding: '0 8px', borderRadius: 9, cursor: 'pointer', fontSize: 15,
+    border: '1px solid var(--border)', color: 'var(--text)',
+    background: on ? 'var(--chip)' : 'var(--surface)', fontWeight: on ? 800 : 500
+  });
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+        {FORMAT_BUTTONS.map((b) => (
+          <button
+            key={b.cmd}
+            type="button"
+            title={b.title}
+            aria-label={b.title}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => run(b.cmd)}
+            style={btn(!!active[b.cmd])}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={ref}
+        className="note-rich note-editor"
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-multiline="true"
+        data-placeholder="Nội dung ghi chú... (gõ 1. hoặc - đầu dòng để tạo danh sách)"
+        onInput={emit}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        style={{
+          minHeight: 180, maxHeight: '45vh', overflowY: 'auto', padding: 12, fontSize: 15, lineHeight: 1.55,
+          outline: 'none', background: 'var(--surface)', color: 'var(--text)', whiteSpace: 'pre-wrap'
+        }}
+      />
+    </div>
+  );
+}
+
 function NoteEditor({
   heading,
   initial,
@@ -130,9 +263,13 @@ function NoteEditor({
   onSave: (v: { title: string; content: string; color: ColorKey }) => void;
 }) {
   const [title, setTitle] = useState(initial.title);
-  const [content, setContent] = useState(initial.content);
+  const [html, setHtml] = useState('');
+  const [plain, setPlain] = useState('');
   const [color, setColor] = useState<ColorKey>(initial.color);
-  const ok = content.trim().length > 0;
+  const initialHtml = useRef(initial.content ? sanitizeNoteHtml(noteToHtml(initial.content)) : '').current;
+  const stored = html ? editorHtmlToStored(html) : '';
+  const tooLong = stored.length > MAX_NOTE_LENGTH;
+  const ok = plain.trim().length > 0 && !tooLong;
   const field: React.CSSProperties = {
     width: '100%', borderRadius: 12, border: '1px solid var(--border)', fontFamily: 'inherit',
     background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box'
@@ -156,16 +293,22 @@ function NoteEditor({
           placeholder="Tiêu đề ghi chú"
           style={{ ...field, height: 46, padding: '0 12px', fontSize: 16, fontWeight: 700, marginBottom: 10 }}
         />
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          maxLength={5000}
-          placeholder="Nội dung ghi chú..."
-          style={{ ...field, minHeight: 180, padding: 12, fontSize: 14.5, lineHeight: 1.55, resize: 'vertical' }}
+        <style>{RICH_CSS}</style>
+        <RichEditor
+          initialHtml={initialHtml}
+          onChange={(h, t) => {
+            setHtml(h);
+            setPlain(t);
+          }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 14, fontSize: 11.5, color: 'var(--muted)' }}>
-          <span>{error && <span style={{ color: '#C63C3C' }}>{error}</span>}</span>
-          <span>{content.length}/5000</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 6, marginBottom: 14, fontSize: 11.5, color: 'var(--muted)' }}>
+          <span>
+            {error && <span style={{ color: '#C63C3C' }}>{error}</span>}
+            {!error && tooLong && <span style={{ color: '#C63C3C' }}>Ghi chú quá dài — vui lòng rút gọn hoặc tách thành 2 ghi chú.</span>}
+          </span>
+          <span style={{ whiteSpace: 'nowrap', color: tooLong ? '#C63C3C' : undefined }}>
+            {Math.min(100, Math.round((stored.length / MAX_NOTE_LENGTH) * 100))}% dung lượng
+          </span>
         </div>
 
         <ColorPicker value={color} onChange={setColor} />
@@ -179,7 +322,7 @@ function NoteEditor({
             Huỷ
           </button>
           <button
-            onClick={() => onSave({ title: title.trim(), content: content.trim(), color })}
+            onClick={() => onSave({ title: title.trim(), content: stored, color })}
             disabled={!ok || saving}
             style={{
               height: 42, padding: '0 22px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: 'var(--accent-contrast)',
@@ -296,6 +439,7 @@ export default function NotesTab({ me }: { me: Staff | null }) {
 
   return (
     <div>
+      <style>{RICH_CSS}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>Ghi chú</h1>
@@ -336,7 +480,10 @@ export default function NotesTab({ me }: { me: Staff | null }) {
                 key={n.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setViewing(n)}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('a')) return;
+                  setViewing(n);
+                }}
                 onKeyDown={(e) => { if (e.key === 'Enter') setViewing(n); }}
                 style={{
                   position: 'relative', background: p.bg, color: p.fg, borderRadius: 14, cursor: 'pointer',
@@ -349,13 +496,14 @@ export default function NotesTab({ me }: { me: Staff | null }) {
                   <div style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.35, wordBreak: 'break-word' }}>{n.title}</div>
                 )}
                 <div
+                  className="note-rich"
                   style={{
-                    fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                    fontSize: 14, lineHeight: 1.55, maxHeight: '6.2em', overflow: 'hidden',
+                    WebkitMaskImage: 'linear-gradient(180deg, #000 70%, transparent)',
+                    maskImage: 'linear-gradient(180deg, #000 70%, transparent)'
                   }}
-                >
-                  {n.content}
-                </div>
+                  dangerouslySetInnerHTML={{ __html: noteDisplayHtml(n.content) }}
+                />
                 <div style={{ fontSize: 12, fontWeight: 600, color: p.sub }}>Xem đầy đủ →</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, borderTop: `1px solid ${p.sub.replace(/[\d.]+\)$/, '0.18)')}`, paddingTop: 10 }}>
                   <NoteMeta n={n} sub={p.sub} />
@@ -379,7 +527,11 @@ export default function NotesTab({ me }: { me: Staff | null }) {
                 ✕
               </button>
             </div>
-            <div style={{ fontSize: 15, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{viewing.content}</div>
+            <div
+              className="note-rich"
+              style={{ fontSize: 15, lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: noteDisplayHtml(viewing.content) }}
+            />
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, marginTop: 20, paddingTop: 12, borderTop: `1px solid ${vp.sub.replace(/[\d.]+\)$/, '0.18)')}` }}>
               <NoteMeta n={viewing} sub={vp.sub} />
               {!!me && <ActionButtons fg={vp.fg} onEdit={() => openEdit(viewing)} onDelete={() => setDeleteTarget(viewing)} />}
