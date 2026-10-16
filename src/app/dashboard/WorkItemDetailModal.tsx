@@ -255,7 +255,7 @@ function TaskChecklistBlock({
                     <button
                       onClick={saveEdit}
                       aria-label="Lưu tên đầu việc"
-                      style={{ border: 'none', background: 'transparent', color: '#2E7D32', cursor: 'pointer', fontSize: 13 }}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--st-green)', cursor: 'pointer', fontSize: 13 }}
                     >
                       ✓
                     </button>
@@ -333,7 +333,7 @@ function TaskChecklistBlock({
                       <button
                         onClick={() => deleteItem(item)}
                         aria-label="Xoá đầu việc này"
-                        style={{ border: 'none', background: 'transparent', color: '#C63C3C', cursor: 'pointer', fontSize: 12 }}
+                        style={{ border: 'none', background: 'transparent', color: 'var(--st-red)', cursor: 'pointer', fontSize: 12 }}
                       >
                         ✕
                       </button>
@@ -646,8 +646,8 @@ function CompletionSection({
             height: 20,
             flexShrink: 0,
             borderRadius: 6,
-            border: '1.5px solid ' + (current.completed ? '#2E7D32' : 'var(--border)'),
-            background: current.completed ? '#2E7D32' : 'transparent',
+            border: '1.5px solid ' + (current.completed ? 'var(--st-green)' : 'var(--border)'),
+            background: current.completed ? 'var(--st-green)' : 'transparent',
             cursor: canEdit ? 'pointer' : 'default',
             padding: 0
           }}
@@ -655,7 +655,7 @@ function CompletionSection({
         >
           {current.completed && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
         </button>
-        <span style={{ fontSize: 13, fontWeight: 700, color: current.completed ? '#2E7D32' : 'var(--text)' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: current.completed ? 'var(--st-green)' : 'var(--text)' }}>
           HOÀN THÀNH CÔNG VIỆC
         </span>
       </div>

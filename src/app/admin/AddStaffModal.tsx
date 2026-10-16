@@ -226,7 +226,7 @@ export default function AddStaffModal({
               </select>
             </label>
 
-            {error && <div style={{ fontSize: 12.5, color: '#C63C3C', marginBottom: 14 }}>{error}</div>}
+            {error && <div style={{ fontSize: 12.5, color: 'var(--st-red)', marginBottom: 14 }}>{error}</div>}
 
             <button
               onClick={handleCreate}

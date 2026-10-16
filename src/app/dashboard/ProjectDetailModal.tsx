@@ -376,7 +376,7 @@ function TaskEditModal({
                   height: 42,
                   borderRadius: 9,
                   border: 'none',
-                  background: '#C63C3C',
+                  background: 'var(--st-red)',
                   color: '#fff',
                   fontSize: 12.5,
                   fontWeight: 700,
@@ -395,7 +395,7 @@ function TaskEditModal({
                   borderRadius: 9,
                   border: '1px solid var(--border)',
                   background: 'transparent',
-                  color: '#C63C3C',
+                  color: 'var(--st-red)',
                   fontSize: 15,
                   fontWeight: 700,
                   cursor: 'pointer'

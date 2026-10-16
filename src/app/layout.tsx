@@ -9,18 +9,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+          rel="stylesheet"
+        />
         <style>{`
+          /* Giá trị mặc định = theme "Trắng – Xám – Đen" (Sáng). ThemeProvider ghi đè theo theme của tài khoản. */
           :root {
-            --bg: #FBFBF9;
+            --bg: #F6F6F5;
             --surface: #FFFFFF;
-            --text: #141413;
-            --muted: #6B6B68;
-            --muted-2: #B2B2B2;
-            --border: #E5E5E5;
-            --chip: #EDEDEA;
-            --accent: #141413;
-            --accent-contrast: #FBFBF9;
+            --text: #18181B;
+            --muted: #5F5F66;
+            --muted-2: #A3A3A8;
+            --border: #E3E3E1;
+            --chip: #EDEDEC;
+            --accent: #18181B;
+            --accent-contrast: #FFFFFF;
+            --accent-ink: #18181B;
+            --st-red: #C63C3C;
+            --st-orange: #B0650A;
+            --st-blue: #4A6FA8;
+            --st-green: #2E7D32;
           }
+          body, button, input, select, textarea { font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+          body { transition: background-color .2s ease, color .2s ease; }
           html { -webkit-text-size-adjust: 100%; }
           .m-only { display: none !important; }
 
@@ -34,6 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             .m-hide { display: none !important; }
             .m-only { display: flex !important; }
             .m-pad { padding-left: 14px !important; padding-right: 14px !important; }
+            .ode-tabs { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; box-sizing: border-box; }
+            .ode-theme-pop { position: fixed !important; top: 64px !important; left: 12px !important; right: 12px !important; width: auto !important; }
 
             /* Popup giữa màn hình → trượt từ dưới lên (bottom sheet) kiểu iOS */
             div[style*="fixed"][style*="translate(-50%"] {
@@ -115,7 +131,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         style={{
           margin: 0,
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif",
           background: 'var(--bg)',
           color: 'var(--text)'
         }}
@@ -130,7 +146,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             fontSize: 15,
             lineHeight: 1.3,
             color: 'var(--muted-2)',
-            background: 'rgba(255,255,255,0.85)',
+            background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
             padding: '3px 8px',
             borderRadius: 7,
             pointerEvents: 'none',

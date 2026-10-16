@@ -69,11 +69,11 @@ function buildProjectSummaries(projects: Project[], rows: WorkRow[]): ProjectSum
 
 function projectStatus(s: ProjectSummary): StatusInfo {
   if (s.rows.length === 0) return { key: 'none', label: '⚪ Chưa có đầu việc', color: 'var(--muted)', bg: 'var(--chip)' };
-  if (s.allCompleted) return { key: 'done', label: '✅ Hoàn thành', color: '#2E7D32', bg: 'rgba(46,125,50,0.12)' };
+  if (s.allCompleted) return { key: 'done', label: '✅ Hoàn thành', color: 'var(--st-green)', bg: 'rgba(46,125,50,0.12)' };
   const d = s.nearestDeadline ? daysUntil(s.nearestDeadline) : null;
-  if (d !== null && d < 0) return { key: 'overdue', label: '🔴 Trễ hạn', color: '#C63C3C', bg: 'rgba(198,60,60,0.12)' };
-  if (d !== null && d <= 3) return { key: 'soon', label: '🟡 Sắp đến hạn', color: '#C2760B', bg: 'rgba(194,118,11,0.12)' };
-  return { key: 'ontrack', label: '🟢 Đúng tiến độ', color: '#2E7D32', bg: 'rgba(46,125,50,0.1)' };
+  if (d !== null && d < 0) return { key: 'overdue', label: '🔴 Trễ hạn', color: 'var(--st-red)', bg: 'rgba(198,60,60,0.12)' };
+  if (d !== null && d <= 3) return { key: 'soon', label: '🟡 Sắp đến hạn', color: 'var(--st-orange)', bg: 'rgba(194,118,11,0.12)' };
+  return { key: 'ontrack', label: '🟢 Đúng tiến độ', color: 'var(--st-green)', bg: 'rgba(46,125,50,0.1)' };
 }
 
 type RoleKey = 'mkt' | 'ttth' | 'st' | 'dung';
@@ -137,7 +137,7 @@ function statusCellContent(s: ProjectSummary) {
       {visible.map((r) => {
         const d = r.nearestDeadline ? daysUntil(r.nearestDeadline) : null;
         const overdue = !r.completed && d !== null && d < 0;
-        const color = r.completed ? '#2E7D32' : overdue ? '#C63C3C' : 'var(--text)';
+        const color = r.completed ? 'var(--st-green)' : overdue ? 'var(--st-red)' : 'var(--text)';
         const text = s.rows.length > 1 ? `${r.headline || 'Đầu việc'}: ${workItemStatusText(r)}` : workItemStatusText(r);
         return (
           <div key={r.key} style={{ fontSize: 11.5, color, lineHeight: 1.35 }}>
@@ -242,7 +242,7 @@ function buildStaffWorkload(rows: WorkRow[], allStaff: Staff[], deptKey: DeptKey
     .sort((a, b) => b.open - a.open);
 }
 
-const WORKLOAD_PALETTE = ['#4F7CFF', '#2E7D32', '#C2760B', '#C63C3C', '#7C4DFF', '#00897B', '#AD1457', '#5D4037', '#546E7A', '#00ACC1'];
+const WORKLOAD_PALETTE = ['#4F7CFF', 'var(--st-green)', 'var(--st-orange)', 'var(--st-red)', '#7C4DFF', '#00897B', '#AD1457', '#5D4037', '#546E7A', '#00ACC1'];
 
 function WorkloadDonut({ data }: { data: { label: string; value: number; total: number; color: string }[] }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
@@ -610,7 +610,7 @@ export default function ReportShell() {
                 Trình duyệt chặn tab mới — bấm vào đây để mở Sheet
               </a>
             )}
-            {sheetError && <div style={{ fontSize: 11.5, color: '#C63C3C', maxWidth: 260 }}>{sheetError}</div>}
+            {sheetError && <div style={{ fontSize: 11.5, color: 'var(--st-red)', maxWidth: 260 }}>{sheetError}</div>}
             <button
               onClick={exportCsv}
               style={{
@@ -669,9 +669,9 @@ export default function ReportShell() {
         >
           {[
             { label: 'Tổng số dự án', value: totalCount, color: 'var(--text)' },
-            { label: '🔴 Trễ hạn', value: overdueCount, color: '#C63C3C' },
-            { label: '🟡 Sắp đến hạn', value: soonCount, color: '#C2760B' },
-            { label: '✅ Hoàn thành', value: doneCount, color: '#2E7D32' }
+            { label: '🔴 Trễ hạn', value: overdueCount, color: 'var(--st-red)' },
+            { label: '🟡 Sắp đến hạn', value: soonCount, color: 'var(--st-orange)' },
+            { label: '✅ Hoàn thành', value: doneCount, color: 'var(--st-green)' }
           ].map((card) => (
             <div
               key={card.label}
@@ -762,8 +762,8 @@ export default function ReportShell() {
                 >
                   <div style={{ fontWeight: 600 }}>{w.staff.name}</div>
                   <div>{w.open}</div>
-                  <div style={{ color: w.overdue > 0 ? '#C63C3C' : 'inherit', fontWeight: w.overdue > 0 ? 700 : 400 }}>{w.overdue}</div>
-                  <div style={{ color: w.soon > 0 ? '#C2760B' : 'inherit', fontWeight: w.soon > 0 ? 700 : 400 }}>{w.soon}</div>
+                  <div style={{ color: w.overdue > 0 ? 'var(--st-red)' : 'inherit', fontWeight: w.overdue > 0 ? 700 : 400 }}>{w.overdue}</div>
+                  <div style={{ color: w.soon > 0 ? 'var(--st-orange)' : 'inherit', fontWeight: w.soon > 0 ? 700 : 400 }}>{w.soon}</div>
                   <div style={{ color: 'var(--muted)' }}>{w.done}</div>
                 </div>
               ))}
@@ -802,7 +802,7 @@ export default function ReportShell() {
           </select>
         </div>
 
-        {error && <div style={{ marginBottom: 16, fontSize: 13, color: '#C63C3C' }}>{error}</div>}
+        {error && <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--st-red)' }}>{error}</div>}
 
         <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>
           <div
@@ -854,7 +854,7 @@ export default function ReportShell() {
                     style={{
                       fontSize: 13,
                       fontWeight: 600,
-                      color: status.key === 'ontrack' ? '#7B9ACC' : 'var(--text)'
+                      color: status.key === 'ontrack' ? 'var(--st-blue)' : 'var(--text)'
                     }}
                   >
                     {s.project.title}
@@ -875,7 +875,7 @@ export default function ReportShell() {
                         style={{
                           width: `${s.progress}%`,
                           height: '100%',
-                          background: s.progress >= 100 ? '#2E7D32' : 'var(--accent)',
+                          background: s.progress >= 100 ? 'var(--st-green)' : 'var(--accent)',
                           borderRadius: 3
                         }}
                       />
@@ -924,7 +924,7 @@ export default function ReportShell() {
                                 padding: '8px 0',
                                 fontSize: 12,
                                 borderBottom: '1px solid var(--border)',
-                                color: r.completed ? '#2E7D32' : overdue ? '#C63C3C' : 'var(--text)'
+                                color: r.completed ? 'var(--st-green)' : overdue ? 'var(--st-red)' : 'var(--text)'
                               }}
                             >
                               <div>{r.headline || '—'}</div>

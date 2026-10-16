@@ -128,7 +128,7 @@ export default function ChangePasswordPage() {
         </label>
 
         {error && (
-          <div style={{ fontSize: 12.5, color: '#C63C3C', marginBottom: 10 }}>{error}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--st-red)', marginBottom: 10 }}>{error}</div>
         )}
 
         <button

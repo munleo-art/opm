@@ -155,7 +155,7 @@ export default function ActivateAccountPage() {
               />
             </label>
 
-            {error && <div style={{ fontSize: 12.5, color: '#C63C3C', marginBottom: 10 }}>{error}</div>}
+            {error && <div style={{ fontSize: 12.5, color: 'var(--st-red)', marginBottom: 10 }}>{error}</div>}
 
             <button type="submit" disabled={loading} style={buttonStyle(loading)}>
               {loading ? 'Đang kiểm tra...' : 'Tiếp tục'}
@@ -207,7 +207,7 @@ export default function ActivateAccountPage() {
               />
             </label>
 
-            {error && <div style={{ fontSize: 12.5, color: '#C63C3C', marginBottom: 10 }}>{error}</div>}
+            {error && <div style={{ fontSize: 12.5, color: 'var(--st-red)', marginBottom: 10 }}>{error}</div>}
 
             <button type="submit" disabled={loading} style={buttonStyle(loading)}>
               {loading ? 'Đang lưu...' : 'Xác nhận và vào hệ thống'}

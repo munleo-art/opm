@@ -226,7 +226,7 @@ export default function ProjectPipelineModal({
               fontSize: 12
             }}
           >
-            <span style={{ color: '#2E7D32', lineHeight: 1.4 }}>
+            <span style={{ color: 'var(--st-green)', lineHeight: 1.4 }}>
               Dự án <strong>&quot;{title}&quot;</strong> đã có sẵn — công việc bên dưới sẽ được thêm vào dự án này, không tạo
               dự án mới.
             </span>
@@ -260,7 +260,7 @@ export default function ProjectPipelineModal({
               padding: '10px 12px',
               marginBottom: 14,
               fontSize: 12,
-              color: '#C63C3C',
+              color: 'var(--st-red)',
               lineHeight: 1.4
             }}
           >
@@ -327,7 +327,7 @@ export default function ProjectPipelineModal({
             </div>
           )}
           {!isExisting && projectQuery.trim() && (
-            <span style={{ fontSize: 10.5, color: '#2E7D32', fontWeight: 400 }}>Chưa có trong danh sách — sẽ tạo dự án mới với tên này</span>
+            <span style={{ fontSize: 10.5, color: 'var(--st-green)', fontWeight: 400 }}>Chưa có trong danh sách — sẽ tạo dự án mới với tên này</span>
           )}
         </label>
 

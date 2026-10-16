@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import type { Staff, Project, Task, Brief, Department, NotificationRow } from '../../lib/types';
 import LogoutButton from './LogoutButton';
@@ -16,6 +16,7 @@ import BriefTab from './BriefTab';
 import ProjectDetailModal from './ProjectDetailModal';
 import AddProjectModal from './AddProjectModal';
 import { canAddProject, visibleStaff } from '../../lib/permissions';
+import { useTheme } from '../../lib/ThemeProvider';
 
 export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'duan' | 'brief' | 'taikhoan';
 
@@ -34,6 +35,8 @@ export default function AppShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const { loadFromAccount } = useTheme();
+  const themeLoadedFor = useRef<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     const {
@@ -87,6 +90,14 @@ export default function AppShell() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Theme đi theo tài khoản: áp theme đã lưu 1 lần khi tải xong tài khoản (không ghi đè lại mỗi lần làm mới dữ liệu).
+  useEffect(() => {
+    if (!me || themeLoadedFor.current === me.id) return;
+    themeLoadedFor.current = me.id;
+    const m = me as Staff & { theme_key?: string | null; theme_mode?: string | null };
+    loadFromAccount(me.id, m.theme_key, m.theme_mode);
+  }, [me, loadFromAccount]);
 
   useEffect(() => {
     if (!me) return;
@@ -142,15 +153,24 @@ export default function AppShell() {
             gap: 10
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1, whiteSpace: 'nowrap' }}>
-              ODE PROJECT MANAGER
-            </div>
+          <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
-              style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              aria-hidden="true"
+              style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              {me?.name} · {me?.department?.name}
-              <span className="m-hide"> · {me?.permission}</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="7.5" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.1, whiteSpace: 'nowrap' }}>ODE Project Manager</div>
+              <div
+                style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {me?.name} · {me?.department?.name}
+                <span className="m-hide"> · {me?.permission}</span>
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -184,43 +204,42 @@ export default function AppShell() {
             </span>
           </div>
         </div>
-        <div
-          className="m-pad"
-          style={{
-            maxWidth: 1100,
-            margin: '0 auto',
-            padding: '0 24px 14px',
-            display: 'flex',
-            gap: 8
-          }}
+        <div className="m-pad" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 14px' }}>
+        <nav
+          aria-label="Điều hướng chính"
+          className="ode-tabs"
+          style={{ display: 'inline-flex', gap: 4, background: 'var(--chip)', padding: 4, borderRadius: 12 }}
         >
           {(
             [
-              ['dashboard', 'DASHBOARD'],
-              ['calendar', 'LỊCH'],
-              ['ghichu', 'GHI CHÚ']
+              ['dashboard', 'Dashboard'],
+              ['calendar', 'Lịch'],
+              ['ghichu', 'Ghi chú']
               // Tạm ẩn tab DỰ ÁN và BRIEF theo yêu cầu — logic/route vẫn giữ nguyên bên dưới, chỉ ẩn nút điều hướng.
             ] as [TabKey, string][]
           ).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
+              aria-current={activeTab === key ? 'page' : undefined}
               style={{
-                height: 34,
-                padding: '0 16px',
-                borderRadius: 18,
-                border: '1px solid var(--border)',
-                background: activeTab === key ? 'var(--accent)' : 'transparent',
-                color: activeTab === key ? 'var(--accent-contrast)' : 'var(--text)',
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.4,
+                height: 36,
+                padding: '0 18px',
+                borderRadius: 9,
+                border: 'none',
+                background: activeTab === key ? 'var(--surface)' : 'transparent',
+                color: activeTab === key ? 'var(--accent-ink)' : 'var(--muted)',
+                boxShadow: activeTab === key ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                fontFamily: 'inherit',
+                fontSize: 14,
+                fontWeight: activeTab === key ? 700 : 500,
                 cursor: 'pointer'
               }}
             >
               {label}
             </button>
           ))}
+        </nav>
         </div>
       </div>
 

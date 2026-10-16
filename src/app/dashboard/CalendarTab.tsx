@@ -311,11 +311,11 @@ function MobileAgenda({
                     <div
                       style={{
                         flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, lineHeight: 1.3,
-                        color: isToday || overdue ? '#C63C3C' : 'var(--text)'
+                        color: isToday || overdue ? 'var(--st-red)' : 'var(--text)'
                       }}
                     >
                       <div>{isToday ? 'Hôm nay' : dow}</div>
-                      <div style={{ fontWeight: 500, color: isToday || overdue ? '#C63C3C' : 'var(--muted)' }}>{ddmm(it.end)}</div>
+                      <div style={{ fontWeight: 500, color: isToday || overdue ? 'var(--st-red)' : 'var(--muted)' }}>{ddmm(it.end)}</div>
                     </div>
                   </div>
                 );
@@ -493,7 +493,7 @@ export default function CalendarTab({
         }}
       >
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>Lịch</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Lịch</h1>
           <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
             Đang xem theo: <strong style={{ color: 'var(--text)' }}>{filterModeLabel}</strong>
           </p>

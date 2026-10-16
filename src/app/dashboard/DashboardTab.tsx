@@ -33,11 +33,11 @@ function daysUntil(dateStr: string) {
 // Đã đánh dấu "Hoàn thành công việc" => xanh lá, bỏ qua trạng thái deadline.
 // Chưa tới hạn (hoặc chưa đặt deadline) và chưa hoàn thành => xanh blue, thay cho màu đen mặc định.
 function rowStyle(diffDays: number | null, completed: boolean) {
-  if (completed) return { color: '#2E7D32', fontWeight: 400 };
-  if (diffDays === null) return { color: '#7B9ACC', fontWeight: 400 };
-  if (diffDays <= 1) return { color: '#C63C3C', fontWeight: 700 };
-  if (diffDays <= 3) return { color: '#C2760B', fontWeight: 700 };
-  return { color: '#7B9ACC', fontWeight: 400 };
+  if (completed) return { color: 'var(--st-green)', fontWeight: 400 };
+  if (diffDays === null) return { color: 'var(--st-blue)', fontWeight: 400 };
+  if (diffDays <= 1) return { color: 'var(--st-red)', fontWeight: 700 };
+  if (diffDays <= 3) return { color: 'var(--st-orange)', fontWeight: 700 };
+  return { color: 'var(--st-blue)', fontWeight: 400 };
 }
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -48,7 +48,7 @@ function ProgressBar({ percent }: { percent: number }) {
           style={{
             width: `${percent}%`,
             height: '100%',
-            background: percent >= 100 ? '#2E7D32' : 'currentColor',
+            background: percent >= 100 ? 'var(--st-green)' : 'currentColor',
             borderRadius: 3
           }}
         />
@@ -58,28 +58,53 @@ function ProgressBar({ percent }: { percent: number }) {
   );
 }
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function NameButtons({ names, onPick }: { names: { staff: Staff }[]; onPick: (s: Staff) => void }) {
-  if (names.length === 0) return <span>—</span>;
+  if (names.length === 0) return <span style={{ opacity: 0.5 }}>—</span>;
   return (
-    <span>
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
       {names.map((n, i) => (
-        <span key={n.staff.id + i}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onPick(n.staff);
-            }}
+        <button
+          key={n.staff.id + i}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick(n.staff);
+          }}
+          style={{
+            color: 'inherit', fontWeight: 'inherit', background: 'none', border: 'none', padding: 0, font: 'inherit',
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, textAlign: 'left'
+          }}
+        >
+          <span
+            aria-hidden="true"
             style={{
-              color: 'inherit', fontWeight: 'inherit', background: 'none', border: 'none',
-              padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer'
+              width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: 'var(--chip)', color: 'var(--accent-ink)',
+              fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
             }}
           >
-            {n.staff.name}
-          </button>
-          {i < names.length - 1 && ', '}
-        </span>
+            {initials(n.staff.name)}
+          </span>
+          <span style={{ textDecoration: 'underline', textUnderlineOffset: 2, textDecorationThickness: 1 }}>{n.staff.name}</span>
+        </button>
       ))}
     </span>
+  );
+}
+
+function OverdueWarning() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--st-red)', fontWeight: 700, fontSize: 11, marginTop: 3 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 9v4M12 17h.01" />
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      </svg>
+      ĐÃ QUÁ DEADLINE
+    </div>
   );
 }
 
@@ -119,12 +144,12 @@ const COLS = '1.3fr 1.4fr 1fr 1fr 1fr 1fr 1.1fr 1fr';
 // ===== Giao diện điện thoại: mỗi đầu việc = 1 thẻ =====
 
 function deadlineBadge(row: WorkRow, diffDays: number | null): { text: string; fg: string; bg: string } {
-  if (row.completed) return { text: '✓ Đã xong', fg: '#2E7D32', bg: 'rgba(46,125,50,0.12)' };
+  if (row.completed) return { text: '✓ Đã xong', fg: 'var(--st-green)', bg: 'rgba(46,125,50,0.12)' };
   if (diffDays === null || !row.nearestDeadline) return { text: 'Chưa có hạn', fg: 'var(--muted)', bg: 'var(--chip)' };
-  if (diffDays < 0) return { text: `Quá hạn ${-diffDays} ngày`, fg: '#C63C3C', bg: 'rgba(198,60,60,0.12)' };
-  if (diffDays === 0) return { text: 'Hạn hôm nay', fg: '#C63C3C', bg: 'rgba(198,60,60,0.12)' };
-  if (diffDays === 1) return { text: 'Hạn ngày mai', fg: '#C63C3C', bg: 'rgba(198,60,60,0.12)' };
-  if (diffDays <= 3) return { text: `Còn ${diffDays} ngày`, fg: '#C2760B', bg: 'rgba(194,118,11,0.12)' };
+  if (diffDays < 0) return { text: `Quá hạn ${-diffDays} ngày`, fg: 'var(--st-red)', bg: 'rgba(198,60,60,0.12)' };
+  if (diffDays === 0) return { text: 'Hạn hôm nay', fg: 'var(--st-red)', bg: 'rgba(198,60,60,0.12)' };
+  if (diffDays === 1) return { text: 'Hạn ngày mai', fg: 'var(--st-red)', bg: 'rgba(198,60,60,0.12)' };
+  if (diffDays <= 3) return { text: `Còn ${diffDays} ngày`, fg: 'var(--st-orange)', bg: 'rgba(194,118,11,0.12)' };
   const d = new Date(row.nearestDeadline);
   return {
     text: `Hạn ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
@@ -209,7 +234,7 @@ function MobileWorkCard({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
         <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--chip)', overflow: 'hidden' }}>
-          <div style={{ width: `${row.progress}%`, height: '100%', background: row.progress >= 100 ? '#2E7D32' : accent, borderRadius: 3 }} />
+          <div style={{ width: `${row.progress}%`, height: '100%', background: row.progress >= 100 ? 'var(--st-green)' : accent, borderRadius: 3 }} />
         </div>
         <span style={{ fontSize: 11.5, color: 'var(--muted)', minWidth: 32, textAlign: 'right' }}>{row.progress}%</span>
       </div>
@@ -397,7 +422,7 @@ export default function DashboardTab({
         }}
       >
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>Dashboard</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Dashboard</h1>
           <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
             Mỗi đầu việc 1 dòng — nhân sự cả 3 ban trên cùng 1 đầu việc.
           </p>
@@ -557,12 +582,14 @@ export default function DashboardTab({
             style={{
               display: 'grid',
               gridTemplateColumns: COLS,
-              gap: 10,
-              padding: '9px 16px',
+              gap: 12,
+              padding: '12px 18px',
               borderBottom: '1px solid var(--border)',
-              fontSize: 10.5,
-              fontWeight: 700,
-              color: 'var(--muted)'
+              background: 'var(--chip)',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              color: 'var(--accent-ink)'
             }}
           >
             <div>TÊN DỰ ÁN</div>
@@ -594,10 +621,11 @@ export default function DashboardTab({
                 style={{
                   display: 'grid',
                   gridTemplateColumns: COLS,
-                  gap: 10,
-                  padding: '12px 16px',
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '14px 18px',
                   borderBottom: '1px solid var(--border)',
-                  fontSize: 12.5,
+                  fontSize: 13.5,
                   color: style.color,
                   fontWeight: style.fontWeight
                 }}
@@ -652,11 +680,7 @@ export default function DashboardTab({
                 </div>
                 <div>
                   {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
-                  {diffDays !== null && diffDays < 0 && !row.completed && (
-                    <div style={{ color: '#C63C3C', fontWeight: 700, fontSize: 11, marginTop: 2 }}>
-                      🚨 ĐÃ QUÁ DEADLINE
-                    </div>
-                  )}
+                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
                 </div>
               </div>
             );
@@ -729,11 +753,7 @@ export default function DashboardTab({
                 <ProgressBar percent={row.progress} />
                 <div style={{ fontSize: 11 }}>
                   {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
-                  {diffDays !== null && diffDays < 0 && !row.completed && (
-                    <div style={{ color: '#C63C3C', fontWeight: 700, fontSize: 11, marginTop: 2 }}>
-                      🚨 ĐÃ QUÁ DEADLINE
-                    </div>
-                  )}
+                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
                 </div>
               </div>
             );

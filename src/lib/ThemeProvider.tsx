@@ -1,63 +1,53 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createClient } from './supabase/client';
+import { DEFAULT_THEME_KEY, STATUS_COLORS, THEMES, themeByKey, type ThemeMode } from './themes';
 
-export type ThemeMode = 'light' | 'dark';
-export type AccentKey = 'neutral' | 'terracotta' | 'forest' | 'navy' | 'plum' | 'amber';
+export type { ThemeMode } from './themes';
 
-export const ACCENT_SWATCHES: { key: AccentKey; label: string; light: string; dark: string; contrast: string }[] = [
-  { key: 'neutral', label: 'Mặc định', light: '#141413', dark: '#F2F2EF', contrast: '' }, // contrast computed per-mode
-  { key: 'terracotta', label: 'Đất nung', light: '#C1602A', dark: '#C1602A', contrast: '#FFFFFF' },
-  { key: 'forest', label: 'Xanh rêu', light: '#2F6B4F', dark: '#2F6B4F', contrast: '#FFFFFF' },
-  { key: 'navy', label: 'Xanh navy', light: '#24406B', dark: '#24406B', contrast: '#FFFFFF' },
-  { key: 'plum', label: 'Tím mận', light: '#6B2F5E', dark: '#6B2F5E', contrast: '#FFFFFF' },
-  { key: 'amber', label: 'Hổ phách', light: '#9C6B12', dark: '#9C6B12', contrast: '#FFFFFF' }
-];
+// Theme đi theo TÀI KHOẢN (cột staff.theme_key / staff.theme_mode).
+// localStorage chỉ dùng để hiện đúng màu ngay lúc mở trang (tránh nháy màu) trước khi tải xong tài khoản.
 
-function accentFor(accentKey: AccentKey, mode: ThemeMode) {
-  const swatch = ACCENT_SWATCHES.find((s) => s.key === accentKey) ?? ACCENT_SWATCHES[0];
-  const accent = mode === 'dark' ? swatch.dark : swatch.light;
-  const contrast = swatch.key === 'neutral' ? (mode === 'dark' ? '#141413' : '#FBFBF9') : swatch.contrast;
-  return { accent, contrast };
-}
-
-function applyVars(mode: ThemeMode, accentKey: AccentKey) {
+function applyVars(themeKey: string, mode: ThemeMode) {
+  const t = themeByKey(themeKey)[mode];
+  const st = STATUS_COLORS[mode];
   const root = document.documentElement.style;
-  if (mode === 'dark') {
-    root.setProperty('--bg', '#141413');
-    root.setProperty('--surface', '#1E1E1D');
-    root.setProperty('--text', '#F2F2EF');
-    root.setProperty('--muted', '#A8A8A4');
-    root.setProperty('--muted-2', '#7A7A76');
-    root.setProperty('--border', '#3A3A38');
-    root.setProperty('--chip', '#2A2A28');
-  } else {
-    root.setProperty('--bg', '#FBFBF9');
-    root.setProperty('--surface', '#FFFFFF');
-    root.setProperty('--text', '#141413');
-    root.setProperty('--muted', '#6B6B68');
-    root.setProperty('--muted-2', '#B2B2B2');
-    root.setProperty('--border', '#E5E5E5');
-    root.setProperty('--chip', '#EDEDEA');
-  }
-  const { accent, contrast } = accentFor(accentKey, mode);
-  root.setProperty('--accent', accent);
-  root.setProperty('--accent-contrast', contrast);
+  root.setProperty('--bg', t.bg);
+  root.setProperty('--surface', t.surface);
+  root.setProperty('--text', t.text);
+  root.setProperty('--muted', t.muted);
+  root.setProperty('--muted-2', mode === 'dark' ? '#7A7A80' : '#A3A3A8');
+  root.setProperty('--border', t.border);
+  root.setProperty('--chip', t.soft);
+  root.setProperty('--accent', t.accent);
+  root.setProperty('--accent-contrast', t.onAccent);
+  root.setProperty('--accent-ink', t.ink);
+  root.setProperty('--st-red', st.red);
+  root.setProperty('--st-orange', st.orange);
+  root.setProperty('--st-blue', st.blue);
+  root.setProperty('--st-green', st.green);
   document.documentElement.setAttribute('data-theme', mode);
+  document.documentElement.style.colorScheme = mode;
 }
 
 interface ThemeContextValue {
   mode: ThemeMode;
-  accentKey: AccentKey;
+  themeKey: string;
   toggleMode: () => void;
-  setAccentKey: (k: AccentKey) => void;
+  setMode: (m: ThemeMode) => void;
+  setThemeKey: (k: string) => void;
+  /** AppShell gọi khi đã biết tài khoản: áp theme đã lưu của tài khoản đó. */
+  loadFromAccount: (staffId: string, themeKey: string | null | undefined, mode: string | null | undefined) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   mode: 'light',
-  accentKey: 'neutral',
+  themeKey: DEFAULT_THEME_KEY,
   toggleMode: () => {},
-  setAccentKey: () => {}
+  setMode: () => {},
+  setThemeKey: () => {},
+  loadFromAccount: () => {}
 });
 
 export function useTheme() {
@@ -65,33 +55,82 @@ export function useTheme() {
 }
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>('light');
-  const [accentKey, setAccentKeyState] = useState<AccentKey>('neutral');
-  const [ready, setReady] = useState(false);
+  const [mode, setModeState] = useState<ThemeMode>('light');
+  const [themeKey, setThemeKeyState] = useState<string>(DEFAULT_THEME_KEY);
+  const staffIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const storedMode = (localStorage.getItem('ode-theme-mode') as ThemeMode | null) ?? 'light';
-    const storedAccent = (localStorage.getItem('ode-theme-accent') as AccentKey | null) ?? 'neutral';
-    setMode(storedMode);
-    setAccentKeyState(storedAccent);
-    applyVars(storedMode, storedAccent);
-    setReady(true);
+    let storedKey: string | null = null;
+    let storedMode: ThemeMode = 'light';
+    try {
+      storedKey = localStorage.getItem('ode-theme-key');
+      storedMode = localStorage.getItem('ode-theme-mode') === 'dark' ? 'dark' : 'light';
+    } catch {
+      /* bỏ qua */
+    }
+    const key = THEMES.some((t) => t.key === storedKey) ? (storedKey as string) : DEFAULT_THEME_KEY;
+    setThemeKeyState(key);
+    setModeState(storedMode);
+    applyVars(key, storedMode);
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    applyVars(mode, accentKey);
-    localStorage.setItem('ode-theme-mode', mode);
-    localStorage.setItem('ode-theme-accent', accentKey);
-  }, [mode, accentKey, ready]);
+  const persist = useCallback((key: string, m: ThemeMode) => {
+    applyVars(key, m);
+    try {
+      localStorage.setItem('ode-theme-key', key);
+      localStorage.setItem('ode-theme-mode', m);
+    } catch {
+      /* bỏ qua */
+    }
+    const staffId = staffIdRef.current;
+    if (staffId) {
+      createClient().from('staff').update({ theme_key: key, theme_mode: m }).eq('id', staffId).then(() => {});
+    }
+  }, []);
 
-  function toggleMode() {
-    setMode((m) => (m === 'light' ? 'dark' : 'light'));
-  }
+  const setThemeKey = useCallback(
+    (k: string) => {
+      const key = THEMES.some((t) => t.key === k) ? k : DEFAULT_THEME_KEY;
+      setThemeKeyState(key);
+      setModeState((m) => {
+        persist(key, m);
+        return m;
+      });
+    },
+    [persist]
+  );
 
-  function setAccentKey(k: AccentKey) {
-    setAccentKeyState(k);
-  }
+  const setMode = useCallback(
+    (m: ThemeMode) => {
+      setModeState(m);
+      setThemeKeyState((k) => {
+        persist(k, m);
+        return k;
+      });
+    },
+    [persist]
+  );
 
-  return <ThemeContext.Provider value={{ mode, accentKey, toggleMode, setAccentKey }}>{children}</ThemeContext.Provider>;
+  const toggleMode = useCallback(() => setMode(mode === 'light' ? 'dark' : 'light'), [mode, setMode]);
+
+  const loadFromAccount = useCallback((staffId: string, key: string | null | undefined, m: string | null | undefined) => {
+    staffIdRef.current = staffId;
+    const k = THEMES.some((t) => t.key === key) ? (key as string) : DEFAULT_THEME_KEY;
+    const md: ThemeMode = m === 'dark' ? 'dark' : 'light';
+    setThemeKeyState(k);
+    setModeState(md);
+    applyVars(k, md);
+    try {
+      localStorage.setItem('ode-theme-key', k);
+      localStorage.setItem('ode-theme-mode', md);
+    } catch {
+      /* bỏ qua */
+    }
+  }, []);
+
+  return (
+    <ThemeContext.Provider value={{ mode, themeKey, toggleMode, setMode, setThemeKey, loadFromAccount }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }

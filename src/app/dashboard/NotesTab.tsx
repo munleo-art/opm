@@ -303,10 +303,10 @@ function NoteEditor({
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 6, marginBottom: 14, fontSize: 11.5, color: 'var(--muted)' }}>
           <span>
-            {error && <span style={{ color: '#C63C3C' }}>{error}</span>}
-            {!error && tooLong && <span style={{ color: '#C63C3C' }}>Ghi chú quá dài — vui lòng rút gọn hoặc tách thành 2 ghi chú.</span>}
+            {error && <span style={{ color: 'var(--st-red)' }}>{error}</span>}
+            {!error && tooLong && <span style={{ color: 'var(--st-red)' }}>Ghi chú quá dài — vui lòng rút gọn hoặc tách thành 2 ghi chú.</span>}
           </span>
-          <span style={{ whiteSpace: 'nowrap', color: tooLong ? '#C63C3C' : undefined }}>
+          <span style={{ whiteSpace: 'nowrap', color: tooLong ? 'var(--st-red)' : undefined }}>
             {Math.min(100, Math.round((stored.length / MAX_NOTE_LENGTH) * 100))}% dung lượng
           </span>
         </div>
@@ -442,7 +442,7 @@ export default function NotesTab({ me }: { me: Staff | null }) {
       <style>{RICH_CSS}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>Ghi chú</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Ghi chú</h1>
           <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
             Bảng ghi chú riêng của <strong style={{ color: 'var(--text)' }}>{teamName}</strong> — chỉ thành viên trong team xem được.
           </p>
@@ -466,7 +466,7 @@ export default function NotesTab({ me }: { me: Staff | null }) {
       {loading ? (
         <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Đang tải...</div>
       ) : loadError ? (
-        <div style={{ fontSize: 13.5, color: '#C63C3C' }}>{loadError}</div>
+        <div style={{ fontSize: 13.5, color: 'var(--st-red)' }}>{loadError}</div>
       ) : notes.length === 0 ? (
         <div style={{ border: '1px dashed var(--border)', borderRadius: 16, padding: '40px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
           Chưa có ghi chú nào. Bấm <strong style={{ color: 'var(--text)' }}>+</strong> để ghim ghi chú đầu tiên cho team.
@@ -574,7 +574,7 @@ export default function NotesTab({ me }: { me: Staff | null }) {
               <button
                 onClick={confirmDelete}
                 disabled={deleting}
-                style={{ height: 42, padding: '0 18px', borderRadius: 10, border: 'none', background: '#C63C3C', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: deleting ? 0.6 : 1 }}
+                style={{ height: 42, padding: '0 18px', borderRadius: 10, border: 'none', background: 'var(--st-red)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: deleting ? 0.6 : 1 }}
               >
                 {deleting ? 'Đang xoá...' : 'Xoá'}
               </button>

@@ -122,7 +122,7 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
       <div style={{ fontSize: 11.5, color: 'var(--muted)', margin: '-8px 0 24px' }}>
         {uploading ? 'Đang tải ảnh lên…' : 'Bấm dấu + trên ảnh để đổi ảnh đại diện.'}
       </div>
-      {error && <div style={{ fontSize: 12.5, color: '#C63C3C', margin: '-16px 0 20px' }}>{error}</div>}
+      {error && <div style={{ fontSize: 12.5, color: 'var(--st-red)', margin: '-16px 0 20px' }}>{error}</div>}
 
       <h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 600 }}>Thông tin tài khoản</h1>
 

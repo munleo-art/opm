@@ -130,7 +130,7 @@ export default function ChecklistModal({
                 <button
                   onClick={() => deleteItem(item)}
                   aria-label="Xoá đầu việc này"
-                  style={{ border: 'none', background: 'transparent', color: '#C63C3C', cursor: 'pointer', fontSize: 12 }}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--st-red)', cursor: 'pointer', fontSize: 12 }}
                 >
                   ✕
                 </button>

@@ -209,7 +209,7 @@ export default function AdminShell() {
           {canSeeAllStaffAdmin(me) ? `${rows.length} nhân sự trên toàn hệ thống` : `${rows.length} nhân sự của team bạn`}
         </div>
 
-        {error && <div style={{ marginBottom: 16, fontSize: 13, color: '#C63C3C' }}>{error}</div>}
+        {error && <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--st-red)' }}>{error}</div>}
 
         {groups.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Chưa có nhân sự nào.</div>}
 
@@ -354,7 +354,7 @@ export default function AdminShell() {
                   padding: '0 20px',
                   borderRadius: 10,
                   border: 'none',
-                  background: '#C63C3C',
+                  background: 'var(--st-red)',
                   color: '#FFFFFF',
                   fontSize: 13.5,
                   fontWeight: 600,
