@@ -8,6 +8,7 @@ import StaffInfoModal from './StaffInfoModal';
 import ProjectPipelineModal from './ProjectPipelineModal';
 import { canAddProject } from '../../lib/permissions';
 import { useIsMobile } from '../../lib/useIsMobile';
+import { ddmm, inWeekWindow, weekOptions, weekWindow } from '../../lib/weeks';
 
 type SortKey = 'deadline' | 'name-asc' | 'name-desc';
 type ViewMode = 'list' | 'grid';
@@ -289,6 +290,10 @@ export default function DashboardTab({
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState<TeamFilterKey | ''>('');
   const [staffFilter, setStaffFilter] = useState('');
+  // Lọc theo tuần: '' = tất cả tuần; còn lại = khoá Thứ Hai (YYYY-MM-DD) của tuần được chọn.
+  const [weekKey, setWeekKey] = useState('');
+  const weeks = useMemo(() => weekOptions(), []);
+  const win = useMemo(() => (weekKey ? weekWindow(weekKey) : null), [weekKey]);
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -305,12 +310,47 @@ export default function DashboardTab({
     if (teamFilter && staffFilter) {
       base = base.filter((r) => rowMatchesStaffFilter(r, teamFilter, staffFilter));
     }
+    if (win) {
+      base = base.filter((r) => inWeekWindow(r.nearestDeadline, r.completed, win));
+    }
     return sortRows(base, sortKey);
-  }, [rows, query, sortKey, teamFilter, staffFilter]);
+  }, [rows, query, sortKey, teamFilter, staffFilter, win]);
 
   const selectedRow = rows.find((r) => r.key === selectedRowKey) ?? null;
 
-  const activeFilterCount = (teamFilter ? 1 : 0) + (staffFilter ? 1 : 0) + (sortKey !== 'deadline' ? 1 : 0);
+  const activeFilterCount = (teamFilter ? 1 : 0) + (staffFilter ? 1 : 0) + (sortKey !== 'deadline' ? 1 : 0) + (weekKey ? 1 : 0);
+
+  const weekSelect = (style: React.CSSProperties) => (
+    <select value={weekKey} onChange={(e) => setWeekKey(e.target.value)} aria-label="Lọc theo tuần" style={style}>
+      <option value="">Tất cả tuần</option>
+      {weeks.map((w) => (
+        <option key={w.key} value={w.key}>
+          {w.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const weekBanner = win && (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
+        padding: '10px 14px', marginBottom: 12, borderRadius: 12, background: 'var(--chip)', color: 'var(--accent-ink)', fontSize: 13.5
+      }}
+    >
+      <span>
+        Đang xem <b>Tuần {win.first.week}</b> và <b>Tuần {win.second.week}</b> · Thứ Hai {ddmm(win.first.monday)} – Thứ Bảy {ddmm(win.second.saturday)} ·{' '}
+        <b>{filteredRows.length}</b> việc
+        {win.includesToday && <span style={{ opacity: 0.8 }}> (gồm cả việc quá hạn chưa xong)</span>}
+      </span>
+      <button
+        onClick={() => setWeekKey('')}
+        style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 13, color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+      >
+        Bỏ lọc tuần
+      </button>
+    </div>
+  );
   const mSelect: React.CSSProperties = {
     width: '100%', height: 44, padding: '0 12px', borderRadius: 11, border: '1px solid var(--border)',
     background: 'var(--surface)', color: 'var(--text)'
@@ -365,6 +405,7 @@ export default function DashboardTab({
                 background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 10
               }}
             >
+              {weekSelect(mSelect)}
               <select
                 value={teamFilter}
                 onChange={(e) => {
@@ -404,6 +445,7 @@ export default function DashboardTab({
                     setTeamFilter('');
                     setStaffFilter('');
                     setSortKey('deadline');
+                    setWeekKey('');
                   }}
                   style={{ alignSelf: 'flex-start', border: 'none', background: 'none', padding: '2px 0', fontSize: 13.5, textDecoration: 'underline', color: 'var(--muted)', cursor: 'pointer' }}
                 >
@@ -429,6 +471,17 @@ export default function DashboardTab({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {weekSelect({
+            height: 36,
+            padding: '0 10px',
+            borderRadius: 9,
+            border: '1px solid var(--border)',
+            fontSize: 12.5,
+            background: weekKey ? 'var(--chip)' : 'var(--surface)',
+            color: 'var(--text)',
+            fontWeight: weekKey ? 600 : 400,
+            maxWidth: 340
+          })}
           <select
             value={teamFilter}
             onChange={(e) => {
@@ -560,6 +613,8 @@ export default function DashboardTab({
       </div>
 
       )}
+
+      {weekBanner}
 
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
