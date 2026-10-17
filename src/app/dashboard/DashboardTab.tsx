@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Project, Task, Brief, Department, Staff } from '../../lib/types';
 import { buildRows, type WorkRow } from '../../lib/workRows';
 import WorkItemDetailModal from './WorkItemDetailModal';
@@ -8,7 +8,7 @@ import StaffInfoModal from './StaffInfoModal';
 import ProjectPipelineModal from './ProjectPipelineModal';
 import { canAddProject } from '../../lib/permissions';
 import { useIsMobile } from '../../lib/useIsMobile';
-import { ddmm, inWeekWindow, overdueGroups, weekOptions, weekWindow } from '../../lib/weeks';
+import { ddmm, inWeekWindow, weekOptions, weekWindow } from '../../lib/weeks';
 
 type SortKey = 'deadline' | 'name-asc' | 'name-desc';
 type ViewMode = 'list' | 'grid';
@@ -304,186 +304,19 @@ export default function DashboardTab({
     ? allStaff.filter((s) => s.department?.name === teamFilterDeptName)
     : [];
 
-  const baseRows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let base = q ? rows.filter((r) => r.project.title.toLowerCase().includes(q)) : rows;
     if (teamFilter && staffFilter) {
       base = base.filter((r) => rowMatchesStaffFilter(r, teamFilter, staffFilter));
     }
-    return base;
-  }, [rows, query, teamFilter, staffFilter]);
-
-  // Khi lọc tuần: danh sách chính = việc có deadline trong tuần chọn + tuần kế tiếp;
-  // việc quá hạn chưa xong của các tuần trước (khi đang xem tuần hiện tại) gom xuống cuối, có tiêu đề riêng.
-  const filteredRows = useMemo(() => {
-    const base = win ? baseRows.filter((r) => inWeekWindow(r.nearestDeadline, win)) : baseRows;
+    if (win) {
+      base = base.filter((r) => inWeekWindow(r.nearestDeadline, win));
+    }
     return sortRows(base, sortKey);
-  }, [baseRows, win, sortKey]);
-  const overdue = useMemo(
-    () => (win ? overdueGroups(sortRows(baseRows, sortKey), win) : []),
-    [baseRows, win, sortKey]
-  );
-  const overdueCount = overdue.reduce((n, g) => n + g.rows.length, 0);
+  }, [rows, query, sortKey, teamFilter, staffFilter, win]);
 
   const selectedRow = rows.find((r) => r.key === selectedRowKey) ?? null;
-
-  const renderListRow = (row: WorkRow) => {
-            const diffDays = row.nearestDeadline ? daysUntil(row.nearestDeadline) : null;
-            const style = rowStyle(diffDays, row.completed);
-            const mktNames = row.mktStaff ? [{ staff: row.mktStaff }] : [];
-            const ttthNames = row.ttthStaff ? [{ staff: row.ttthStaff }] : [];
-            const stNames = row.stTasks
-              .map((t) => t.st_assignee ?? t.assignee)
-              .filter((s): s is Staff => !!s)
-              .map((s) => ({ staff: s }));
-            const dungNames = row.dungTasks
-              .map((t) => t.dung_assignee ?? t.assignee)
-              .filter((s): s is Staff => !!s)
-              .map((s) => ({ staff: s }));
-            return (
-              <div
-                key={row.key}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: COLS,
-                  gap: 12,
-                  alignItems: 'center',
-                  padding: '14px 18px',
-                  borderBottom: '1px solid var(--border)',
-                  fontSize: 13.5,
-                  color: style.color,
-                  fontWeight: style.fontWeight
-                }}
-              >
-                <button
-                  onClick={() => onSelectProject(row.project.id)}
-                  style={{
-                    color: 'inherit',
-                    fontWeight: 'inherit',
-                    textAlign: 'left',
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    fontSize: 'inherit',
-                    fontFamily: 'inherit',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {row.project.title}
-                </button>
-                <button
-                  onClick={() => setSelectedRowKey(row.key)}
-                  style={{
-                    color: 'inherit',
-                    fontWeight: 'inherit',
-                    textAlign: 'left',
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    fontSize: 'inherit',
-                    fontFamily: 'inherit',
-                    textDecoration: 'underline',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {row.headline || '—'}
-                </button>
-                <div>
-                  <NameButtons names={mktNames} onPick={setSelectedStaff} />
-                </div>
-                <div>
-                  <NameButtons names={ttthNames} onPick={setSelectedStaff} />
-                </div>
-                <div>
-                  <NameButtons names={stNames} onPick={setSelectedStaff} />
-                </div>
-                <div>
-                  <NameButtons names={dungNames} onPick={setSelectedStaff} />
-                </div>
-                <div>
-                  <ProgressBar percent={row.progress} />
-                </div>
-                <div>
-                  {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
-                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
-                </div>
-              </div>
-            );
-  };
-  const renderGridCard = (row: WorkRow) => {
-            const diffDays = row.nearestDeadline ? daysUntil(row.nearestDeadline) : null;
-            const style = rowStyle(diffDays, row.completed);
-            const mktNames = row.mktStaff ? [{ staff: row.mktStaff }] : [];
-            const ttthNames = row.ttthStaff ? [{ staff: row.ttthStaff }] : [];
-            const stNames = row.stTasks
-              .map((t) => t.st_assignee ?? t.assignee)
-              .filter((s): s is Staff => !!s)
-              .map((s) => ({ staff: s }));
-            const dungNames = row.dungTasks
-              .map((t) => t.dung_assignee ?? t.assignee)
-              .filter((s): s is Staff => !!s)
-              .map((s) => ({ staff: s }));
-            return (
-              <div
-                key={row.key}
-                style={{
-                  borderRadius: 16,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  padding: 16,
-                  color: style.color,
-                  fontWeight: style.fontWeight,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8
-                }}
-              >
-                <button
-                  onClick={() => onSelectProject(row.project.id)}
-                  style={{ color: 'inherit', fontWeight: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 13.5, cursor: 'pointer' }}
-                >
-                  {row.project.title}
-                </button>
-                <button
-                  onClick={() => setSelectedRowKey(row.key)}
-                  style={{ color: 'inherit', fontWeight: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
-                >
-                  {row.headline || '—'}
-                </button>
-                <div style={{ fontSize: 11, fontWeight: 400 }}>
-                  MKT: <NameButtons names={mktNames} onPick={setSelectedStaff} />
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 400 }}>
-                  TTTH: <NameButtons names={ttthNames} onPick={setSelectedStaff} />
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 400 }}>
-                  ST: <NameButtons names={stNames} onPick={setSelectedStaff} />
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 400 }}>
-                  Dựng: <NameButtons names={dungNames} onPick={setSelectedStaff} />
-                </div>
-                <ProgressBar percent={row.progress} />
-                <div style={{ fontSize: 11 }}>
-                  {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
-                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
-                </div>
-              </div>
-            );
-  };
-  const overdueHeading = (title: string, extra: React.CSSProperties = {}) => (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', fontSize: 12, fontWeight: 700, letterSpacing: 0.4,
-        color: 'var(--st-red)', background: 'var(--chip)', borderTop: '2px solid var(--st-red)', borderBottom: '1px solid var(--border)', ...extra
-      }}
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 9v4M12 17h.01" />
-        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-      </svg>
-      {title}
-    </div>
-  );
 
   const activeFilterCount = (teamFilter ? 1 : 0) + (staffFilter ? 1 : 0) + (sortKey !== 'deadline' ? 1 : 0) + (weekKey ? 1 : 0);
 
@@ -508,7 +341,7 @@ export default function DashboardTab({
       <span>
         Đang xem <b>Tuần {win.first.week}</b> và <b>Tuần {win.second.week}</b> · Thứ Hai {ddmm(win.first.monday)} – Thứ Bảy {ddmm(win.second.saturday)} ·{' '}
         <b>{filteredRows.length}</b> việc
-        {overdueCount > 0 && <span> · <b style={{ color: 'var(--st-red)' }}>{overdueCount}</b> việc quá hạn tuần trước ở cuối danh sách</span>}
+        {win.includesToday && <span style={{ opacity: 0.8 }}> (gồm cả việc quá hạn chưa xong)</span>}
       </span>
       <button
         onClick={() => setWeekKey('')}
@@ -797,20 +630,6 @@ export default function DashboardTab({
           {filteredRows.length === 0 && (
             <div style={{ padding: '28px 8px', textAlign: 'center', fontSize: 14, color: 'var(--muted)' }}>Không có đầu việc nào.</div>
           )}
-          {overdue.map((g) => (
-            <Fragment key={g.title}>
-              {overdueHeading(g.title, { borderRadius: 12, marginTop: 8, lineHeight: 1.4 })}
-              {g.rows.map((row) => (
-                <MobileWorkCard
-                  key={row.key}
-                  row={row}
-                  onOpen={() => setSelectedRowKey(row.key)}
-                  onOpenProject={() => onSelectProject(row.project.id)}
-                  onPickStaff={setSelectedStaff}
-                />
-              ))}
-            </Fragment>
-          ))}
         </div>
       ) : viewMode === 'list' ? (
         <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>
@@ -838,18 +657,93 @@ export default function DashboardTab({
             <div>DEADLINE</div>
           </div>
 
-          {filteredRows.map(renderListRow)}
+          {filteredRows.map((row) => {
+            const diffDays = row.nearestDeadline ? daysUntil(row.nearestDeadline) : null;
+            const style = rowStyle(diffDays, row.completed);
+            const mktNames = row.mktStaff ? [{ staff: row.mktStaff }] : [];
+            const ttthNames = row.ttthStaff ? [{ staff: row.ttthStaff }] : [];
+            const stNames = row.stTasks
+              .map((t) => t.st_assignee ?? t.assignee)
+              .filter((s): s is Staff => !!s)
+              .map((s) => ({ staff: s }));
+            const dungNames = row.dungTasks
+              .map((t) => t.dung_assignee ?? t.assignee)
+              .filter((s): s is Staff => !!s)
+              .map((s) => ({ staff: s }));
+            return (
+              <div
+                key={row.key}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: COLS,
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '14px 18px',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 13.5,
+                  color: style.color,
+                  fontWeight: style.fontWeight
+                }}
+              >
+                <button
+                  onClick={() => onSelectProject(row.project.id)}
+                  style={{
+                    color: 'inherit',
+                    fontWeight: 'inherit',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {row.project.title}
+                </button>
+                <button
+                  onClick={() => setSelectedRowKey(row.key)}
+                  style={{
+                    color: 'inherit',
+                    fontWeight: 'inherit',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    textDecoration: 'underline',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {row.headline || '—'}
+                </button>
+                <div>
+                  <NameButtons names={mktNames} onPick={setSelectedStaff} />
+                </div>
+                <div>
+                  <NameButtons names={ttthNames} onPick={setSelectedStaff} />
+                </div>
+                <div>
+                  <NameButtons names={stNames} onPick={setSelectedStaff} />
+                </div>
+                <div>
+                  <NameButtons names={dungNames} onPick={setSelectedStaff} />
+                </div>
+                <div>
+                  <ProgressBar percent={row.progress} />
+                </div>
+                <div>
+                  {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
+                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
+                </div>
+              </div>
+            );
+          })}
 
           {filteredRows.length === 0 && (
             <div style={{ padding: 16, fontSize: 12.5, color: 'var(--muted)' }}>Không có đầu việc nào.</div>
           )}
-
-          {overdue.map((g) => (
-            <Fragment key={g.title}>
-              {overdueHeading(g.title)}
-              {g.rows.map(renderListRow)}
-            </Fragment>
-          ))}
         </div>
       ) : (
         <div
@@ -859,16 +753,69 @@ export default function DashboardTab({
             gap: 16
           }}
         >
-          {filteredRows.map(renderGridCard)}
+          {filteredRows.map((row) => {
+            const diffDays = row.nearestDeadline ? daysUntil(row.nearestDeadline) : null;
+            const style = rowStyle(diffDays, row.completed);
+            const mktNames = row.mktStaff ? [{ staff: row.mktStaff }] : [];
+            const ttthNames = row.ttthStaff ? [{ staff: row.ttthStaff }] : [];
+            const stNames = row.stTasks
+              .map((t) => t.st_assignee ?? t.assignee)
+              .filter((s): s is Staff => !!s)
+              .map((s) => ({ staff: s }));
+            const dungNames = row.dungTasks
+              .map((t) => t.dung_assignee ?? t.assignee)
+              .filter((s): s is Staff => !!s)
+              .map((s) => ({ staff: s }));
+            return (
+              <div
+                key={row.key}
+                style={{
+                  borderRadius: 16,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  padding: 16,
+                  color: style.color,
+                  fontWeight: style.fontWeight,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8
+                }}
+              >
+                <button
+                  onClick={() => onSelectProject(row.project.id)}
+                  style={{ color: 'inherit', fontWeight: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 13.5, cursor: 'pointer' }}
+                >
+                  {row.project.title}
+                </button>
+                <button
+                  onClick={() => setSelectedRowKey(row.key)}
+                  style={{ color: 'inherit', fontWeight: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  {row.headline || '—'}
+                </button>
+                <div style={{ fontSize: 11, fontWeight: 400 }}>
+                  MKT: <NameButtons names={mktNames} onPick={setSelectedStaff} />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 400 }}>
+                  TTTH: <NameButtons names={ttthNames} onPick={setSelectedStaff} />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 400 }}>
+                  ST: <NameButtons names={stNames} onPick={setSelectedStaff} />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 400 }}>
+                  Dựng: <NameButtons names={dungNames} onPick={setSelectedStaff} />
+                </div>
+                <ProgressBar percent={row.progress} />
+                <div style={{ fontSize: 11 }}>
+                  {row.nearestDeadline ? new Date(row.nearestDeadline).toLocaleDateString('vi-VN') : '—'}
+                  {diffDays !== null && diffDays < 0 && !row.completed && <OverdueWarning />}
+                </div>
+              </div>
+            );
+          })}
           {filteredRows.length === 0 && (
             <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Không có đầu việc nào.</div>
           )}
-          {overdue.map((g) => (
-            <Fragment key={g.title}>
-              {overdueHeading(g.title, { gridColumn: '1 / -1', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2px solid var(--st-red)' })}
-              {g.rows.map(renderGridCard)}
-            </Fragment>
-          ))}
         </div>
       )}
 
