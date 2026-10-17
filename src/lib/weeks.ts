@@ -83,14 +83,38 @@ export function weekWindow(key: string, today = new Date()): WeekWindow | null {
   return { first, second, start, end, includesToday: t >= start.getTime() && t < addDays(monday, 7).getTime() };
 }
 
-/**
- * Việc thuộc khung 2 tuần nếu deadline gần nhất rơi vào khung.
- * Đang xem tuần hiện tại thì việc đã quá hạn mà chưa xong vẫn hiện (để không bị "mất" khỏi Dashboard).
- * Việc chưa có deadline không hiện khi đang lọc tuần.
- */
-export function inWeekWindow(deadline: string | null, completed: boolean, w: WeekWindow): boolean {
+/** Việc thuộc khung 2 tuần nếu deadline gần nhất rơi vào khung. Việc chưa có deadline không hiện khi đang lọc tuần. */
+export function inWeekWindow(deadline: string | null, w: WeekWindow): boolean {
   if (!deadline) return false;
   const d = startOfDay(new Date(deadline)).getTime();
-  if (d >= w.start.getTime() && d < w.end.getTime()) return true;
-  return w.includesToday && !completed && d < w.start.getTime();
+  return d >= w.start.getTime() && d < w.end.getTime();
+}
+
+/**
+ * Việc quá hạn chưa xong của các tuần trước — chỉ khi đang xem tuần hiện tại.
+ * Hiển thị ở cuối danh sách, gom theo từng tuần, tuần gần nhất lên trước.
+ */
+export function overdueGroups<T extends { nearestDeadline: string | null; completed: boolean }>(
+  rows: T[],
+  w: WeekWindow,
+  today = new Date()
+): { title: string; rows: T[] }[] {
+  if (!w.includesToday) return [];
+  const map = new Map<number, T[]>();
+  for (const r of rows) {
+    if (r.completed || !r.nearestDeadline) continue;
+    const d = startOfDay(new Date(r.nearestDeadline));
+    if (d.getTime() >= w.start.getTime()) continue;
+    const m = mondayOf(d).getTime();
+    map.set(m, [...(map.get(m) ?? []), r]);
+  }
+  const prevMonday = addDays(w.start, -7).getTime();
+  return [...map.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([m, list]) => {
+      const opt = makeOption(new Date(m), today);
+      const range = opt.label.replace(' (tuần này)', '');
+      const title = m === prevMonday ? `VIỆC QUÁ HẠN CỦA TUẦN TRƯỚC (${range})` : `VIỆC QUÁ HẠN CỦA TUẦN CŨ HƠN (${range})`;
+      return { title, rows: list };
+    });
 }
