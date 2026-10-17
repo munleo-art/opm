@@ -90,31 +90,47 @@ export function inWeekWindow(deadline: string | null, w: WeekWindow): boolean {
   return d >= w.start.getTime() && d < w.end.getTime();
 }
 
+export interface DeadlineRow {
+  nearestDeadline: string | null;
+  completed: boolean;
+}
+
+export interface OverdueGroup<R> {
+  title: string;
+  rows: R[];
+}
+
 /**
  * Việc quá hạn chưa xong của các tuần trước — chỉ khi đang xem tuần hiện tại.
  * Hiển thị ở cuối danh sách, gom theo từng tuần, tuần gần nhất lên trước.
  */
-export function overdueGroups<T extends { nearestDeadline: string | null; completed: boolean }>(
-  rows: T[],
-  w: WeekWindow,
-  today = new Date()
-): { title: string; rows: T[] }[] {
+export function overdueGroups<R extends DeadlineRow>(rows: R[], w: WeekWindow, today: Date = new Date()): OverdueGroup<R>[] {
   if (!w.includesToday) return [];
-  const map = new Map<number, T[]>();
-  for (const r of rows) {
+  const mondays: number[] = [];
+  const byMonday: Record<string, R[]> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
     if (r.completed || !r.nearestDeadline) continue;
     const d = startOfDay(new Date(r.nearestDeadline));
     if (d.getTime() >= w.start.getTime()) continue;
     const m = mondayOf(d).getTime();
-    map.set(m, [...(map.get(m) ?? []), r]);
+    const k = String(m);
+    if (!byMonday[k]) {
+      byMonday[k] = [];
+      mondays.push(m);
+    }
+    byMonday[k].push(r);
   }
+  mondays.sort(function (a, b) {
+    return b - a;
+  });
   const prevMonday = addDays(w.start, -7).getTime();
-  return [...map.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([m, list]) => {
-      const opt = makeOption(new Date(m), today);
-      const range = opt.label.replace(' (tuần này)', '');
-      const title = m === prevMonday ? `VIỆC QUÁ HẠN CỦA TUẦN TRƯỚC (${range})` : `VIỆC QUÁ HẠN CỦA TUẦN CŨ HƠN (${range})`;
-      return { title, rows: list };
-    });
+  const out: OverdueGroup<R>[] = [];
+  for (let i = 0; i < mondays.length; i++) {
+    const m = mondays[i];
+    const range = makeOption(new Date(m), today).label.replace(' (tuần này)', '');
+    const title = m === prevMonday ? 'VIỆC QUÁ HẠN CỦA TUẦN TRƯỚC (' + range + ')' : 'VIỆC QUÁ HẠN CỦA TUẦN CŨ HƠN (' + range + ')';
+    out.push({ title: title, rows: byMonday[String(m)] });
+  }
+  return out;
 }
