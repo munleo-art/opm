@@ -39,7 +39,19 @@ const iconBtn: React.CSSProperties = {
   cursor: 'pointer', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0
 };
 
-export default function ThemeControls({ popAlign = 'right' }: { popAlign?: 'left' | 'right' } = {}) {
+// uiVersion/onChangeUi: nút chuyển "Giao diện cũ / Giao diện mới" (lưu theo tài khoản).
+// popDir='up': bảng mở lên trên (khi nút nằm sát đáy màn hình, ví dụ cuối menu trái).
+export default function ThemeControls({
+  popAlign = 'right',
+  popDir = 'down',
+  uiVersion,
+  onChangeUi
+}: {
+  popAlign?: 'left' | 'right';
+  popDir?: 'down' | 'up';
+  uiVersion?: 'old' | 'new';
+  onChangeUi?: (v: 'old' | 'new') => void;
+} = {}) {
   const { mode, themeKey, toggleMode, setMode, setThemeKey } = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -72,7 +84,7 @@ export default function ThemeControls({ popAlign = 'right' }: { popAlign?: 'left
               aria-label="Giao diện"
               style={{
                 position: 'absolute',
-                top: 48,
+                ...(popDir === 'up' ? { bottom: 48 } : { top: 48 }),
                 ...(popAlign === 'left' ? { left: 0 } : { right: 0 }),
                 width: 300,
                 maxHeight: '75vh',
@@ -88,6 +100,20 @@ export default function ThemeControls({ popAlign = 'right' }: { popAlign?: 'left
             >
               <div style={{ fontSize: 16, fontWeight: 700 }}>Giao diện</div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '2px 0 12px' }}>Lưu theo tài khoản của bạn.</div>
+
+              {onChangeUi && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.4, marginBottom: 6 }}>KIỂU GIAO DIỆN</div>
+                  <div role="group" aria-label="Kiểu giao diện" style={{ display: 'flex', gap: 4, background: 'var(--chip)', padding: 4, borderRadius: 12, marginBottom: 12 }}>
+                    <button onClick={() => onChangeUi('old')} aria-pressed={uiVersion !== 'new'} style={modeBtn(uiVersion !== 'new')}>
+                      Giao diện cũ
+                    </button>
+                    <button onClick={() => onChangeUi('new')} aria-pressed={uiVersion === 'new'} style={modeBtn(uiVersion === 'new')}>
+                      Giao diện mới
+                    </button>
+                  </div>
+                </>
+              )}
 
               <div role="group" aria-label="Chế độ sáng tối" style={{ display: 'flex', gap: 4, background: 'var(--chip)', padding: 4, borderRadius: 12, marginBottom: 10 }}>
                 <button onClick={() => setMode('light')} aria-pressed={mode === 'light'} style={modeBtn(mode === 'light')}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { Project, Task, Brief, Department, Staff } from '../../lib/types';
 import { buildRows, type WorkRow } from '../../lib/workRows';
 import WorkItemDetailModal from './WorkItemDetailModal';
@@ -271,7 +271,8 @@ function MobileWorkCard({
 
 
 export default function DashboardTab({
-  projects, tasks, briefs, departments, allStaff, me, onSelectProject, onRefetch
+  projects, tasks, briefs, departments, allStaff, me, onSelectProject, onRefetch,
+  onlyStaffId, title = 'Dashboard', subtitle = 'Mỗi đầu việc 1 dòng — nhân sự cả 3 ban trên cùng 1 đầu việc.', externalQuery
 }: {
   projects: Project[];
   tasks: Task[];
@@ -281,8 +282,17 @@ export default function DashboardTab({
   me: Staff | null;
   onSelectProject: (id: string) => void;
   onRefetch: () => void;
+  // Giao diện mới — mục "Việc của tôi": chỉ giữ các đầu việc có nhân sự này ở bất kỳ cột nào.
+  onlyStaffId?: string;
+  title?: string;
+  subtitle?: string;
+  // Giao diện mới — ô tìm kiếm ở menu trái đẩy chữ vào ô "Tìm tên dự án".
+  externalQuery?: { text: string; at: number };
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(externalQuery?.text ?? '');
+  useEffect(() => {
+    if (externalQuery) setQuery(externalQuery.text);
+  }, [externalQuery]);
   const [sortKey, setSortKey] = useState<SortKey>('deadline');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
@@ -297,7 +307,17 @@ export default function DashboardTab({
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  const rows = useMemo(() => buildRows(projects, tasks, briefs, departments), [projects, tasks, briefs, departments]);
+  const rows = useMemo(() => {
+    const all = buildRows(projects, tasks, briefs, departments);
+    if (!onlyStaffId) return all;
+    return all.filter(
+      (r) =>
+        r.mktStaff?.id === onlyStaffId ||
+        r.ttthStaff?.id === onlyStaffId ||
+        r.stTasks.some((t) => (t.st_assignee ?? t.assignee)?.id === onlyStaffId) ||
+        r.dungTasks.some((t) => (t.dung_assignee ?? t.assignee)?.id === onlyStaffId)
+    );
+  }, [projects, tasks, briefs, departments, onlyStaffId]);
 
   const teamFilterDeptName = TEAM_FILTER_OPTIONS.find((t) => t.value === teamFilter)?.deptName ?? '';
   const staffFilterOptions = teamFilterDeptName
@@ -529,7 +549,7 @@ export default function DashboardTab({
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Dashboard</h1>
+              <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{title}</h1>
               <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{filteredRows.length} việc</span>
             </div>
             {canAddProject(me) && (
@@ -631,9 +651,9 @@ export default function DashboardTab({
         }}
       >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Dashboard</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>{title}</h1>
           <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
-            Mỗi đầu việc 1 dòng — nhân sự cả 3 ban trên cùng 1 đầu việc.
+            {subtitle}
           </p>
         </div>
 

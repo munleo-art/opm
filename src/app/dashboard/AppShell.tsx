@@ -17,6 +17,8 @@ import ProjectDetailModal from './ProjectDetailModal';
 import AddProjectModal from './AddProjectModal';
 import { canAddProject, visibleStaff } from '../../lib/permissions';
 import { useTheme } from '../../lib/ThemeProvider';
+import { readUiVersion, saveUiVersion, type UiVersion } from '../../lib/uiVersion';
+import NewShell from './v2/NewShell';
 
 export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'duan' | 'brief' | 'taikhoan';
 
@@ -37,6 +39,9 @@ export default function AppShell() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const { loadFromAccount } = useTheme();
   const themeLoadedFor = useRef<string | null>(null);
+  // Giao diện cũ / mới — theo tài khoản, mặc định cũ.
+  const [uiVersion, setUiVersion] = useState<UiVersion>('old');
+  const uiLoadedFor = useRef<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     const {
@@ -100,6 +105,21 @@ export default function AppShell() {
   }, [me, loadFromAccount]);
 
   useEffect(() => {
+    if (!me || uiLoadedFor.current === me.id) return;
+    uiLoadedFor.current = me.id;
+    setUiVersion(readUiVersion(me as Staff & { ui_version?: string | null }));
+  }, [me]);
+
+  const changeUi = useCallback(
+    (v: UiVersion) => {
+      setUiVersion(v);
+      setActiveTab('dashboard');
+      saveUiVersion(me?.id, v);
+    },
+    [me]
+  );
+
+  useEffect(() => {
     if (!me) return;
     const channel = supabase
       .channel('notif-' + me.id)
@@ -128,6 +148,36 @@ export default function AppShell() {
   }
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+
+  // ===== GIAO DIỆN MỚI (chỉ khi tài khoản bật) — giao diện cũ bên dưới giữ nguyên =====
+  if (uiVersion === 'new' && me) {
+    return (
+      <NewShell
+        me={me}
+        allStaff={allStaff}
+        departments={departments}
+        projects={projects}
+        tasks={tasks}
+        briefs={briefs}
+        notifications={notifications}
+        onRefetch={fetchAll}
+        onSelectProject={(id) => setSelectedProjectId(id)}
+        uiVersion={uiVersion}
+        onChangeUi={changeUi}
+      >
+        {selectedProject && (
+          <ProjectDetailModal
+            project={selectedProject}
+            me={me}
+            allStaff={allStaff}
+            tasks={tasks.filter((t) => t.project_id === selectedProject.id)}
+            onClose={() => setSelectedProjectId(null)}
+            onRefetch={fetchAll}
+          />
+        )}
+      </NewShell>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -183,7 +233,7 @@ export default function AppShell() {
             />
             {/* Trên điện thoại: chỉnh giao diện + Đăng xuất nằm trong trang Tài khoản (bấm avatar) cho header gọn */}
             <span className="m-hide" style={{ display: 'contents' }}>
-              <ThemeControls />
+              <ThemeControls uiVersion={uiVersion} onChangeUi={changeUi} />
             </span>
             <button
               onClick={() => setActiveTab('taikhoan')}
@@ -281,7 +331,7 @@ export default function AppShell() {
           setSelectedProjectId(id);
           setActiveTab('duan');
         }} />}
-        {activeTab === 'taikhoan' && <AccountTab me={me} onRefetch={fetchAll} />}
+        {activeTab === 'taikhoan' && <AccountTab me={me} onRefetch={fetchAll} uiVersion={uiVersion} onChangeUi={changeUi} />}
       </div>
 
       {selectedProject && (

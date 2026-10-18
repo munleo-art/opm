@@ -309,7 +309,8 @@ function csvEscape(v: string) {
   return s;
 }
 
-export default function ReportShell() {
+// embedded: hiển thị bên trong giao diện mới (có menu trái) — bỏ nút quay lại, thanh trên không dính.
+export default function ReportShell({ embedded = false }: { embedded?: boolean } = {}) {
   const supabase = createClient();
   const router = useRouter();
 
@@ -556,10 +557,10 @@ export default function ReportShell() {
   if (!me) return null;
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', background: 'var(--bg)', color: 'var(--text)' }}>
+    <div style={{ minHeight: embedded ? undefined : '100vh', width: '100%', background: 'var(--bg)', color: 'var(--text)' }}>
       <div
         style={{
-          position: 'sticky',
+          position: embedded ? 'static' : 'sticky',
           top: 0,
           zIndex: 20,
           width: '100%',
@@ -580,6 +581,7 @@ export default function ReportShell() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!embedded && (
             <Link
               href="/admin"
               aria-label="Về trang quản trị"
@@ -597,6 +599,7 @@ export default function ReportShell() {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </Link>
+            )}
             <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.2 }}>BÁO CÁO TỔNG HỢP</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -27,7 +27,17 @@ function InfoRow({ label, value, last }: { label: string; value: string; last?: 
   );
 }
 
-export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefetch: () => void }) {
+export default function AccountTab({
+  me,
+  onRefetch,
+  uiVersion,
+  onChangeUi
+}: {
+  me: Staff | null;
+  onRefetch: () => void;
+  uiVersion?: 'old' | 'new';
+  onChangeUi?: (v: 'old' | 'new') => void;
+}) {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -192,7 +202,7 @@ export default function AccountTab({ me, onRefetch }: { me: Staff | null; onRefe
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>Giao diện</span>
-          <ThemeControls popAlign="left" />
+          <ThemeControls popAlign="left" uiVersion={uiVersion} onChangeUi={onChangeUi} />
         </div>
         <LogoutButton />
       </div>
