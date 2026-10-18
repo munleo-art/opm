@@ -177,7 +177,7 @@ export default function NewShell({
       style={{
         width: expanded ? 264 : 76, flexShrink: 0, boxSizing: 'border-box', background: 'var(--surface)', borderRight: '1px solid var(--border)',
         padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 12, height: '100vh', position: isMobile ? 'relative' : 'sticky', top: 0,
-        overflowY: 'auto', overflowX: 'visible'
+        zIndex: 30
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: expanded ? 'space-between' : 'center', gap: 8, padding: '2px 2px 0' }}>
@@ -254,7 +254,7 @@ export default function NewShell({
         </form>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {expanded && <div style={sectionLabel}>LÀM VIỆC</div>}
         <button onClick={() => go('dashboard')} aria-current={inTabs ? 'page' : undefined} title="Dashboard" style={item(inTabs)}>
           <Svg>{Icon.dashboard}</Svg>
@@ -320,8 +320,6 @@ export default function NewShell({
           </>
         )}
       </div>
-
-      <div style={{ flex: 1 }} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 10, position: 'relative' }}>
         <button onClick={toggleNotif} aria-expanded={notifOpen} title="Thông báo" style={item(notifOpen)}>
