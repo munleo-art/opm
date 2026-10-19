@@ -6,26 +6,52 @@ import { buildRows } from '../../lib/workRows';
 import { useIsMobile } from '../../lib/useIsMobile';
 import { isDemoStaff } from '../../lib/permissions';
 
-// Tab PHÂN CÔNG — chỉ hiển thị TÊN DỰ ÁN – TÊN NHÂN SỰ, tự lấy từ dữ liệu OPM.
-// Một người "đang làm" 1 dự án khi có tên trong ít nhất 1 đầu việc CHƯA XONG của dự án đó
+// Tab PHÂN CÔNG — 1 bảng: BĐS/CORP · Tên dự án/brand · Nhân sự Ban ST · Ban MKT · Ban TTTH.
+// Mỗi dòng = 1 nhân sự trên 1 dự án (không gộp ô, không ghép nhiều tên vào 1 ô).
+// Dữ liệu tự lấy từ OPM: nhân sự có tên trong ít nhất 1 đầu việc CHƯA XONG của dự án
 // (MKT / người đăng brief, TTTH, Sáng tạo) — đúng các đầu việc đang hiện ở Dashboard.
-// Áp dụng cho nhân sự Ban Sáng tạo, Ban Marketing, Ban TTTH.
+// Mặc định: Xếp theo nhân sự Ban ST (A→Z), mỗi người 1 khối có màu riêng.
+// Bấm ▾ ở tiêu đề cột Nhân sự để chọn Xếp theo nhân sự của ban đó, hoặc Xếp theo dự án.
 
-const BANS = ['Ban Sáng tạo', 'Ban Marketing', 'Ban TTTH'];
-
-// Màu ô tên nhân sự: nền nhạt + chữ đậm cùng tông, cố định không đổi theo theme để luôn dễ đọc.
-const PALETTE: [string, string][] = [
-  ['#F9CB9C', '#3D2A12'],
-  ['#C3B5E3', '#24193F'],
-  ['#F4CCCC', '#3D1717'],
-  ['#D6E9CF', '#1E3318'],
-  ['#A9C4F5', '#0F1F3D'],
-  ['#9FD8DF', '#0F2E33'],
-  ['#FFE59A', '#3D3210'],
-  ['#E8D3EC', '#341A3A'],
-  ['#CFE3F7', '#132A40'],
-  ['#F6D6A8', '#3D2A0F']
+type BanKey = 'st' | 'mkt' | 'ttth';
+const BANS: { key: BanKey; label: string }[] = [
+  { key: 'st', label: 'NHÂN SỰ BAN ST' },
+  { key: 'mkt', label: 'NHÂN SỰ BAN MKT' },
+  { key: 'ttth', label: 'NHÂN SỰ BAN TTTH' }
 ];
+const GROUP_ORDER = ['BĐS Miền Bắc', 'BĐS Miền Trung', 'BĐS Miền Nam', 'SSG', 'SCG', 'KLB'];
+
+// Màu khối nhân sự: nền nhạt + chữ đậm cùng tông, cố định không đổi theo theme để luôn dễ đọc.
+const PALETTE: [string, string][] = [
+  ['#C2E8EC', '#0F2E33'],
+  ['#FFEDB0', '#3D3210'],
+  ['#F3D6E4', '#3D1729'],
+  ['#E9E1D3', '#33291A'],
+  ['#FCD9B6', '#3D2A12'],
+  ['#D9CFF0', '#24193F'],
+  ['#D3EBCB', '#1E3318'],
+  ['#C9DAF8', '#0F1F3D'],
+  ['#F8D7D7', '#3D1717'],
+  ['#EBD9EF', '#341A3A'],
+  ['#D6E9F8', '#132A40'],
+  ['#F7DFBF', '#3D2A0F'],
+  ['#E3EDC9', '#25331A'],
+  ['#D8E6E1', '#173328']
+];
+
+interface Line {
+  key: string;
+  group: string;
+  projectId: string;
+  title: string;
+  ban: BanKey;
+  staff: Staff;
+}
+
+function groupRank(g: string) {
+  const i = GROUP_ORDER.indexOf(g);
+  return i === -1 ? GROUP_ORDER.length : i;
+}
 
 export default function PhanCongTab({
   projects,
@@ -41,61 +67,105 @@ export default function PhanCongTab({
   allStaff: Staff[];
 }) {
   const isMobile = useIsMobile();
-  const [ban, setBan] = useState('');
   const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<BanKey | ''>('st');
+  const [menu, setMenu] = useState<BanKey | ''>('');
 
-  const sections = useMemo(() => {
+  const { lines, colorOf } = useMemo(() => {
+    const activeIds: Record<string, boolean> = {};
+    allStaff.forEach((s) => {
+      if ((s as Staff & { is_active?: boolean }).is_active !== false && !isDemoStaff(s)) activeIds[s.id] = true;
+    });
     const rows = buildRows(projects, tasks, briefs, departments).filter((r) => !r.completed);
-    // staffId -> danh sách dự án (không trùng)
-    const byStaff: Record<string, { id: string; title: string }[]> = {};
-    const add = (s: Staff | null | undefined, p: Project) => {
-      if (!s) return;
-      const list = byStaff[s.id] || (byStaff[s.id] = []);
-      if (!list.some((x) => x.id === p.id)) list.push({ id: p.id, title: p.title });
+    const seen: Record<string, boolean> = {};
+    const out: Line[] = [];
+    const add = (s: Staff | null | undefined, ban: BanKey, p: Project) => {
+      if (!s || !activeIds[s.id]) return;
+      const key = p.id + '|' + ban + '|' + s.id;
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push({ key, group: p.group_name || '—', projectId: p.id, title: p.title, ban, staff: s });
     };
     rows.forEach((r) => {
-      add(r.mktStaff, r.project);
-      add(r.ttthStaff, r.project);
-      r.stTasks.forEach((t) => add(t.st_assignee ?? t.assignee, r.project));
+      r.stTasks.forEach((t) => add(t.st_assignee ?? t.assignee, 'st', r.project));
+      add(r.mktStaff, 'mkt', r.project);
+      add(r.ttthStaff, 'ttth', r.project);
     });
-
-    let colorIdx = 0;
-    return BANS.map((banName) => {
-      const people = allStaff
-        .filter((s) => s.department?.name === banName && (s as Staff & { is_active?: boolean }).is_active !== false && !isDemoStaff(s))
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
-        .map((s) => {
-          const list = (byStaff[s.id] || []).slice().sort((a, b) => a.title.localeCompare(b.title, 'vi'));
-          const color = PALETTE[colorIdx++ % PALETTE.length];
-          return { staff: s, projects: list, color };
-        });
-      return { ban: banName, people };
+    const banRank = (b: BanKey) => (b === 'st' ? 0 : b === 'mkt' ? 1 : 2);
+    out.sort(
+      (a, b) =>
+        groupRank(a.group) - groupRank(b.group) ||
+        a.title.localeCompare(b.title, 'vi') ||
+        banRank(a.ban) - banRank(b.ban) ||
+        a.staff.name.localeCompare(b.staff.name, 'vi')
+    );
+    // Mỗi nhân sự 1 màu cố định (theo tên A→Z)
+    const names: string[] = [];
+    out.forEach((l) => {
+      if (names.indexOf(l.staff.id) === -1) names.push(l.staff.id);
     });
+    const byName = out.slice();
+    const idsSorted = names
+      .map((id) => byName.find((l) => l.staff.id === id)!.staff)
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+      .map((s) => s.id);
+    const colors: Record<string, [string, string]> = {};
+    idsSorted.forEach((id, i) => {
+      colors[id] = PALETTE[i % PALETTE.length];
+    });
+    return { lines: out, colorOf: colors };
   }, [projects, tasks, briefs, departments, allStaff]);
 
-  // Tìm dự án: chỉ giữ dự án khớp tên, ẩn người không có dự án nào khớp.
   const q = query.trim().toLowerCase();
-  const shown = (ban ? sections.filter((s) => s.ban === ban) : sections)
-    .map((sec) =>
-      q
-        ? {
-            ...sec,
-            people: sec.people
-              .map((p) => ({ ...p, projects: p.projects.filter((pr) => pr.title.toLowerCase().indexOf(q) !== -1) }))
-              .filter((p) => p.projects.length > 0)
-          }
-        : sec
-    )
-    .filter((sec) => !q || sec.people.length > 0);
-  const nameCol = isMobile ? 130 : 220;
-  const line = '1px solid var(--border)';
-  // Đường phân cách giữa 2 nhân sự: đậm hơn hẳn đường giữa các dự án, để nhìn rõ từng người.
-  const personLine = '3px solid var(--muted)';
+  const visible = q ? lines.filter((l) => l.title.toLowerCase().indexOf(q) !== -1) : lines;
+  const projectCount = useMemo(() => {
+    const ids: Record<string, boolean> = {};
+    lines.forEach((l) => (ids[l.projectId] = true));
+    return Object.keys(ids).length;
+  }, [lines]);
 
-  const chip = (on: boolean): React.CSSProperties => ({
-    height: 36, padding: '0 14px', borderRadius: 10, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
-    border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border)'), background: on ? 'var(--accent)' : 'var(--surface)', color: on ? 'var(--accent-contrast)' : 'var(--text)'
+  // Xếp theo nhân sự của 1 ban: mỗi người 1 khối (A→Z), đủ mọi dự án của người đó
+  const blocks = useMemo(() => {
+    if (!sortBy) return [];
+    const order: string[] = [];
+    const map: Record<string, Line[]> = {};
+    visible
+      .filter((l) => l.ban === sortBy)
+      .forEach((l) => {
+        if (!map[l.staff.id]) {
+          map[l.staff.id] = [];
+          order.push(l.staff.id);
+        }
+        map[l.staff.id].push(l);
+      });
+    return order
+      .map((id) => ({ id, name: map[id][0].staff.name, rows: map[id] }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  }, [visible, sortBy]);
+
+  const COLS = '150px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)';
+  const cellLine = (colored: boolean) => '1px solid ' + (colored ? 'rgba(27,31,36,0.12)' : 'var(--border)');
+
+  const renderRow = (l: Line, i: number, color: [string, string] | null) => (
+    <div
+      key={l.key}
+      style={{
+        display: 'grid', gridTemplateColumns: COLS, borderTop: i === 0 ? 'none' : cellLine(!!color),
+        background: color ? color[0] : 'transparent', color: color ? color[1] : 'var(--text)', fontSize: 13.5
+      }}
+    >
+      <div style={{ padding: '9px 12px', borderRight: cellLine(!!color) }}>{l.group}</div>
+      <div style={{ padding: '9px 12px', fontWeight: 600, borderRight: cellLine(!!color), wordBreak: 'break-word' }}>{l.title}</div>
+      <div style={{ padding: '9px 12px', borderRight: cellLine(!!color) }}>{l.ban === 'st' ? l.staff.name : ''}</div>
+      <div style={{ padding: '9px 12px', borderRight: cellLine(!!color) }}>{l.ban === 'mkt' ? l.staff.name : ''}</div>
+      <div style={{ padding: '9px 12px' }}>{l.ban === 'ttth' ? l.staff.name : ''}</div>
+    </div>
+  );
+
+  const menuItem = (on: boolean): React.CSSProperties => ({
+    display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', borderRadius: 8, fontFamily: 'inherit',
+    fontSize: 13, cursor: 'pointer', color: 'var(--text)', background: on ? 'var(--chip)' : 'transparent', fontWeight: on ? 700 : 500,
+    letterSpacing: 0, textTransform: 'none'
   });
 
   return (
@@ -103,84 +173,106 @@ export default function PhanCongTab({
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Phân công</h1>
         <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
-          Nhân sự nào đang làm dự án nào — tự lấy từ các đầu việc chưa xong trên OPM.
+          Nhân sự nào đang làm dự án nào — tự lấy từ các đầu việc chưa xong trên OPM · {projectCount} dự án đang có việc chưa xong
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', maxWidth: '100%' }}>
-        <button onClick={() => setBan('')} aria-pressed={!ban} style={chip(!ban)}>
-          Tất cả
-        </button>
-        {BANS.map((b) => (
-          <button key={b} onClick={() => setBan(b)} aria-pressed={ban === b} style={chip(ban === b)}>
-            {b}
-          </button>
-        ))}
-      </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm dự án..."
-          aria-label="Tìm dự án"
-          style={{
-            height: 36, padding: '0 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13,
-            background: 'var(--surface)', color: 'var(--text)', width: isMobile ? '100%' : 240, boxSizing: 'border-box'
-          }}
-        />
-      </div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Tìm dự án..."
+        aria-label="Tìm dự án"
+        style={{
+          height: 36, padding: '0 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13, marginBottom: 16,
+          background: 'var(--surface)', color: 'var(--text)', width: isMobile ? '100%' : 260, boxSizing: 'border-box'
+        }}
+      />
 
-      {q && shown.length === 0 && <div style={{ fontSize: 13.5, color: 'var(--muted)', marginBottom: 18 }}>Không tìm thấy dự án nào khớp.</div>}
+      {menu && <div onClick={() => setMenu('')} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />}
 
-      {shown.map((sec) => (
-        <section key={sec.ban} style={{ marginBottom: 26 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '0 0 8px 2px' }}>
-            <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>{sec.ban}</h2>
-            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sec.people.length} người</span>
-          </div>
-          {sec.people.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>Ban này chưa có nhân sự.</div>
-          ) : (
-            <div style={{ background: 'var(--surface)', border: line, borderRadius: 12, overflow: 'hidden', maxWidth: 780 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflowX: 'auto' }}>
+        <div style={{ minWidth: 900 }}>
+          <div
+            style={{
+              display: 'grid', gridTemplateColumns: COLS, background: 'var(--chip)', borderBottom: '1px solid var(--border)',
+              fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.4
+            }}
+          >
+            <div style={{ padding: '11px 12px', borderRight: '1px solid var(--border)' }}>BĐS / CORP</div>
+            <div style={{ padding: '11px 12px', borderRight: '1px solid var(--border)' }}>TÊN DỰ ÁN / BRAND</div>
+            {BANS.map((b, i) => (
               <div
+                key={b.key}
                 style={{
-                  display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${nameCol}px`, background: 'var(--chip)', borderBottom: line,
-                  fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.4
+                  position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '6px 6px 6px 12px',
+                  borderRight: i < BANS.length - 1 ? '1px solid var(--border)' : 'none', color: sortBy === b.key ? 'var(--accent-ink)' : undefined
                 }}
               >
-                <div style={{ padding: '9px 12px', borderRight: line }}>TÊN DỰ ÁN</div>
-                <div style={{ padding: '9px 12px' }}>TÊN NHÂN SỰ</div>
-              </div>
-              {sec.people.map((p, i) => (
-                <div key={p.staff.id} style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${nameCol}px`, borderTop: i === 0 ? 'none' : personLine }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', borderRight: line }}>
-                    {p.projects.length === 0 ? (
-                      <div style={{ minHeight: 36, padding: '8px 12px', fontSize: 13, color: 'var(--muted)', boxSizing: 'border-box' }}>—</div>
-                    ) : (
-                      p.projects.map((pr, j) => (
-                        <div
-                          key={pr.id}
-                          style={{ minHeight: 36, padding: '8px 12px', fontSize: 13.5, borderTop: j === 0 ? 'none' : line, boxSizing: 'border-box', wordBreak: 'break-word' }}
-                        >
-                          {pr.title}
-                        </div>
-                      ))
-                    )}
-                  </div>
+                <span>{b.label}</span>
+                <button
+                  onClick={() => setMenu(menu === b.key ? '' : b.key)}
+                  aria-expanded={menu === b.key}
+                  aria-label={'Cách xếp — ' + b.label}
+                  style={{
+                    width: 28, height: 28, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)',
+                    color: 'var(--text)', cursor: 'pointer', fontSize: 11
+                  }}
+                >
+                  ▾
+                </button>
+                {menu === b.key && (
                   <div
+                    role="menu"
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 10,
-                      fontSize: isMobile ? 13 : 14, fontWeight: 600, background: p.color[0], color: p.color[1], wordBreak: 'break-word'
+                      position: 'absolute', top: 40, right: 6, zIndex: 31, width: 220, background: 'var(--surface)', border: '1px solid var(--border)',
+                      borderRadius: 12, boxShadow: '0 14px 34px rgba(20,20,19,0.16)', padding: 6
                     }}
                   >
-                    {p.staff.name}
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setSortBy(b.key);
+                        setMenu('');
+                      }}
+                      style={menuItem(sortBy === b.key)}
+                    >
+                      Xếp theo nhân sự (A → Z)
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setSortBy('');
+                        setMenu('');
+                      }}
+                      style={menuItem(!sortBy)}
+                    >
+                      Xếp theo dự án
+                    </button>
                   </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {sortBy ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10 }}>
+              {blocks.map((blk) => (
+                <div key={blk.id} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(27,31,36,0.14)' }}>
+                  {blk.rows.map((l, i) => renderRow(l, i, colorOf[l.staff.id]))}
                 </div>
               ))}
+              {blocks.length === 0 && (
+                <div style={{ padding: 6, fontSize: 13.5, color: 'var(--muted)' }}>{q ? 'Không tìm thấy dự án nào khớp.' : 'Ban này hiện chưa có nhân sự nào đang làm dự án.'}</div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {visible.map((l, i) => renderRow(l, i, null))}
+              {visible.length === 0 && <div style={{ padding: 16, fontSize: 13.5, color: 'var(--muted)' }}>Không tìm thấy dự án nào khớp.</div>}
             </div>
           )}
-        </section>
-      ))}
+        </div>
+      </div>
     </div>
   );
 }
