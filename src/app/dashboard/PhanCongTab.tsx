@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Project, Task, Brief, Department, Staff } from '../../lib/types';
 import { buildRows } from '../../lib/workRows';
 import { useIsMobile } from '../../lib/useIsMobile';
+import { isDemoStaff } from '../../lib/permissions';
 
 // Tab PHÂN CÔNG — chỉ hiển thị TÊN DỰ ÁN – TÊN NHÂN SỰ, tự lấy từ dữ liệu OPM.
 // Một người "đang làm" 1 dự án khi có tên trong ít nhất 1 đầu việc CHƯA XONG của dự án đó
@@ -41,6 +42,7 @@ export default function PhanCongTab({
 }) {
   const isMobile = useIsMobile();
   const [ban, setBan] = useState('');
+  const [query, setQuery] = useState('');
 
   const sections = useMemo(() => {
     const rows = buildRows(projects, tasks, briefs, departments).filter((r) => !r.completed);
@@ -60,7 +62,7 @@ export default function PhanCongTab({
     let colorIdx = 0;
     return BANS.map((banName) => {
       const people = allStaff
-        .filter((s) => s.department?.name === banName && (s as Staff & { is_active?: boolean }).is_active !== false)
+        .filter((s) => s.department?.name === banName && (s as Staff & { is_active?: boolean }).is_active !== false && !isDemoStaff(s))
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
         .map((s) => {
@@ -72,9 +74,24 @@ export default function PhanCongTab({
     });
   }, [projects, tasks, briefs, departments, allStaff]);
 
-  const shown = ban ? sections.filter((s) => s.ban === ban) : sections;
+  // Tìm dự án: chỉ giữ dự án khớp tên, ẩn người không có dự án nào khớp.
+  const q = query.trim().toLowerCase();
+  const shown = (ban ? sections.filter((s) => s.ban === ban) : sections)
+    .map((sec) =>
+      q
+        ? {
+            ...sec,
+            people: sec.people
+              .map((p) => ({ ...p, projects: p.projects.filter((pr) => pr.title.toLowerCase().indexOf(q) !== -1) }))
+              .filter((p) => p.projects.length > 0)
+          }
+        : sec
+    )
+    .filter((sec) => !q || sec.people.length > 0);
   const nameCol = isMobile ? 130 : 220;
   const line = '1px solid var(--border)';
+  // Đường phân cách giữa 2 nhân sự: đậm hơn hẳn đường giữa các dự án, để nhìn rõ từng người.
+  const personLine = '3px solid var(--muted)';
 
   const chip = (on: boolean): React.CSSProperties => ({
     height: 36, padding: '0 14px', borderRadius: 10, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
@@ -90,7 +107,8 @@ export default function PhanCongTab({
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 18 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', maxWidth: '100%' }}>
         <button onClick={() => setBan('')} aria-pressed={!ban} style={chip(!ban)}>
           Tất cả
         </button>
@@ -100,6 +118,19 @@ export default function PhanCongTab({
           </button>
         ))}
       </div>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm dự án..."
+          aria-label="Tìm dự án"
+          style={{
+            height: 36, padding: '0 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13,
+            background: 'var(--surface)', color: 'var(--text)', width: isMobile ? '100%' : 240, boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
+      {q && shown.length === 0 && <div style={{ fontSize: 13.5, color: 'var(--muted)', marginBottom: 18 }}>Không tìm thấy dự án nào khớp.</div>}
 
       {shown.map((sec) => (
         <section key={sec.ban} style={{ marginBottom: 26 }}>
@@ -121,7 +152,7 @@ export default function PhanCongTab({
                 <div style={{ padding: '9px 12px' }}>TÊN NHÂN SỰ</div>
               </div>
               {sec.people.map((p, i) => (
-                <div key={p.staff.id} style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${nameCol}px`, borderTop: i === 0 ? 'none' : line }}>
+                <div key={p.staff.id} style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${nameCol}px`, borderTop: i === 0 ? 'none' : personLine }}>
                   <div style={{ display: 'flex', flexDirection: 'column', borderRight: line }}>
                     {p.projects.length === 0 ? (
                       <div style={{ minHeight: 36, padding: '8px 12px', fontSize: 13, color: 'var(--muted)', boxSizing: 'border-box' }}>—</div>
