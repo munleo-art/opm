@@ -11,6 +11,7 @@ import ThemeControls from './ThemeControls';
 import DashboardTab from './DashboardTab';
 import CalendarTab from './CalendarTab';
 import NotesTab from './NotesTab';
+import PhanCongTab from './PhanCongTab';
 import ProjectsTab from './ProjectsTab';
 import BriefTab from './BriefTab';
 import ProjectDetailModal from './ProjectDetailModal';
@@ -20,7 +21,7 @@ import { useTheme } from '../../lib/ThemeProvider';
 import { readUiVersion, saveUiVersion, type UiVersion } from '../../lib/uiVersion';
 import NewShell from './v2/NewShell';
 
-export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'duan' | 'brief' | 'taikhoan';
+export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'duan' | 'brief' | 'taikhoan';
 
 export default function AppShell() {
   const supabase = createClient();
@@ -264,7 +265,8 @@ export default function AppShell() {
             [
               ['dashboard', 'Dashboard'],
               ['calendar', 'Lịch'],
-              ['ghichu', 'Ghi chú']
+              ['ghichu', 'Ghi chú'],
+              ['phancong', 'Phân công']
               // Tạm ẩn tab DỰ ÁN và BRIEF theo yêu cầu — logic/route vẫn giữ nguyên bên dưới, chỉ ẩn nút điều hướng.
             ] as [TabKey, string][]
           ).map(([key, label]) => (
@@ -308,6 +310,9 @@ export default function AppShell() {
           />
         )}
         {activeTab === 'ghichu' && <NotesTab me={me} />}
+        {activeTab === 'phancong' && (
+          <PhanCongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
+        )}
         {activeTab === 'calendar' && (
           <CalendarTab
             projects={projects}
