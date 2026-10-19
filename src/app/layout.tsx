@@ -48,8 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             .m-hide { display: none !important; }
             .m-only { display: flex !important; }
             .m-pad { padding-left: 14px !important; padding-right: 14px !important; }
-            .ode-tabs { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; box-sizing: border-box; }
-            .ode-tabs button { padding: 0 4px !important; font-size: 13.5px !important; white-space: nowrap; }
+            .ode-tabs { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; box-sizing: border-box; }
+            .ode-tabs button { padding: 0 2px !important; font-size: 12.5px !important; white-space: nowrap; }
             .ode-theme-pop { position: fixed !important; top: 64px !important; left: 12px !important; right: 12px !important; width: auto !important; }
 
             /* Popup giữa màn hình → trượt từ dưới lên (bottom sheet) kiểu iOS */

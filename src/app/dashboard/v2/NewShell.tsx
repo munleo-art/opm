@@ -12,6 +12,7 @@ import DashboardTab from '../DashboardTab';
 import CalendarTab from '../CalendarTab';
 import NotesTab from '../NotesTab';
 import PhanCongTab from '../PhanCongTab';
+import VanPhongTab from '../VanPhongTab';
 import AccountTab from '../AccountTab';
 import ThemeControls from '../ThemeControls';
 import LogoutButton from '../LogoutButton';
@@ -26,7 +27,7 @@ import StaffView from './StaffView';
 // Chỉ thay KHUNG (menu trái). Dashboard, Lịch, Ghi chú, Tài khoản, Báo cáo dùng lại đúng component
 // của giao diện cũ nên mọi tính năng giữ nguyên. Giao diện cũ không bị sửa.
 
-export type ViewKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'tongquan' | 'viectoi' | 'duan' | 'nhansu' | 'baocao' | 'taikhoan';
+export type ViewKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'tongquan' | 'viectoi' | 'duan' | 'nhansu' | 'baocao' | 'taikhoan';
 
 function relativeTime(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -158,7 +159,7 @@ export default function NewShell({
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   }
 
-  const inTabs = view === 'dashboard' || view === 'calendar' || view === 'ghichu' || view === 'phancong';
+  const inTabs = view === 'dashboard' || view === 'calendar' || view === 'ghichu' || view === 'phancong' || view === 'vanphong';
 
   const item = (on: boolean): React.CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 42, padding: expanded ? '0 12px' : 0,
@@ -400,7 +401,8 @@ export default function NewShell({
           ['dashboard', 'Dashboard'],
           ['calendar', 'Lịch'],
           ['ghichu', 'Ghi chú'],
-          ['phancong', 'Phân công']
+          ['phancong', 'Phân công'],
+          ['vanphong', 'Văn phòng']
         ] as [ViewKey, string][]
       ).map(([key, label]) => (
         <button
@@ -439,6 +441,9 @@ export default function NewShell({
         <CalendarTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} me={me} onRefetch={onRefetch} />
       )}
       {view === 'ghichu' && <NotesTab me={me} />}
+      {view === 'vanphong' && (
+        <VanPhongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
+      )}
       {view === 'phancong' && (
         <PhanCongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
       )}

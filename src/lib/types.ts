@@ -16,6 +16,8 @@ export interface Staff {
   phone: string | null;
   permission: Permission;
   avatar_url: string | null;
+  // 'Nam' | 'Nữ' — dùng để vẽ nhân vật nam/nữ ở tab Văn phòng
+  gender?: string | null;
   department?: Department | null;
 }
 
@@ -76,6 +78,8 @@ export interface Task {
   ttth_assignee_id: string | null;
   ttth_link: string | null;
   ttth_assignee?: Staff | null;
+  // Tự ghi khi bấm HOÀN THÀNH CÔNG VIỆC (trigger DB) — tab Văn phòng bắn pháo hoa trong 3 ngày
+  completed_at?: string | null;
 }
 
 export interface Brief {
@@ -90,6 +94,7 @@ export interface Brief {
   final_drive_link: string | null;
   final_youtube_link: string | null;
   completed: boolean;
+  completed_at?: string | null;
 }
 
 export interface NotificationRow {

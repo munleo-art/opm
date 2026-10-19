@@ -49,6 +49,7 @@ export default function AddStaffModal({
   const [employeeId, setEmployeeId] = useState('');
   const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
   const [departmentId, setDepartmentId] = useState(
     selectableDepartments.find((d) => d.id === me.department_id)?.id || (selectableDepartments[0]?.id ?? '')
   );
@@ -82,6 +83,11 @@ export default function AddStaffModal({
     if (rpcError || !data?.success) {
       setError(errorMessage(data?.error || 'unknown'));
       return;
+    }
+
+    // Giới tính (dùng cho nhân vật ở tab Văn phòng) — lưu ngay sau khi tạo tài khoản
+    if (gender) {
+      await supabase.from('staff').update({ gender }).eq('employee_id', data.employee_id);
     }
 
     setCreated({ employee_id: data.employee_id, name: data.name });
@@ -126,6 +132,7 @@ export default function AddStaffModal({
                   setEmployeeId('');
                   setPhone('');
                   setDob('');
+                  setGender('');
                   setPosition('');
                 }}
                 style={{
@@ -187,6 +194,15 @@ export default function AddStaffModal({
             <label style={fieldLabelStyle}>
               Ngày sinh
               <DatePicker value={dob} onChange={setDob} placeholder="Chọn ngày sinh" />
+            </label>
+
+            <label style={fieldLabelStyle}>
+              Giới tính
+              <select value={gender} onChange={(e) => setGender(e.target.value)} style={inputStyle}>
+                <option value="">— Chọn giới tính —</option>
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+              </select>
             </label>
 
             <label style={fieldLabelStyle}>
