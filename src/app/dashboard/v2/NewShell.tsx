@@ -222,14 +222,14 @@ export default function NewShell({
             setCreateOpen(true);
             setDrawerOpen(false);
           }}
-          title="Thêm công việc mới"
+          title="Tạo dự án mới"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, border: 'none', borderRadius: 10,
             background: 'var(--accent)', color: 'var(--accent-contrast)', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit'
           }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-          {expanded && <span>Tạo việc</span>}
+          {expanded && <span>Tạo dự án</span>}
         </button>
       )}
 

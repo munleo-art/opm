@@ -8,7 +8,8 @@ import { isDemoStaff } from '../../lib/permissions';
 
 // Tab PHÂN CÔNG — 1 bảng: BĐS/CORP · Tên dự án/brand · Nhân sự Ban ST · Ban MKT · Ban TTTH.
 // Mỗi dòng = 1 nhân sự trên 1 dự án (không gộp ô, không ghép nhiều tên vào 1 ô).
-// Dữ liệu tự lấy từ OPM: nhân sự có tên trong ít nhất 1 đầu việc CHƯA XONG của dự án
+// Dữ liệu tự lấy từ OPM: nhân sự có tên trong ít nhất 1 đầu việc của dự án (tính cả đầu việc đã hoàn thành,
+// để quản lý biết ai đã/đang nắm dự án nào khi điều phối)
 // (MKT / người đăng brief, TTTH, Sáng tạo) — đúng các đầu việc đang hiện ở Dashboard.
 // Mặc định: Xếp theo nhân sự Ban ST (A→Z), mỗi người 1 khối có màu riêng.
 // Bấm ▾ ở tiêu đề cột Nhân sự để chọn Xếp theo nhân sự của ban đó, hoặc Xếp theo dự án.
@@ -76,7 +77,7 @@ export default function PhanCongTab({
     allStaff.forEach((s) => {
       if ((s as Staff & { is_active?: boolean }).is_active !== false && !isDemoStaff(s)) activeIds[s.id] = true;
     });
-    const rows = buildRows(projects, tasks, briefs, departments).filter((r) => !r.completed);
+    const rows = buildRows(projects, tasks, briefs, departments);
     const seen: Record<string, boolean> = {};
     const out: Line[] = [];
     const add = (s: Staff | null | undefined, ban: BanKey, p: Project) => {
@@ -173,7 +174,7 @@ export default function PhanCongTab({
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, letterSpacing: -0.4, margin: '0 0 4px' }}>Phân công</h1>
         <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: 0 }}>
-          Nhân sự nào đang làm dự án nào — tự lấy từ các đầu việc chưa xong trên OPM · {projectCount} dự án đang có việc chưa xong
+          Nhân sự nào đã/đang làm dự án nào — tự lấy từ tất cả đầu việc trên OPM (tính cả đã hoàn thành) · {projectCount} dự án
         </p>
       </div>
 

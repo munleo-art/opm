@@ -170,6 +170,7 @@ export default function AppShell() {
         {selectedProject && (
           <ProjectDetailModal
             project={selectedProject}
+            projects={projects}
             me={me}
             allStaff={allStaff}
             tasks={tasks.filter((t) => t.project_id === selectedProject.id)}
@@ -347,6 +348,7 @@ export default function AppShell() {
       {selectedProject && (
         <ProjectDetailModal
           project={selectedProject}
+          projects={projects}
           me={me}
           allStaff={allStaff}
           tasks={tasks.filter((t) => t.project_id === selectedProject.id)}

@@ -161,8 +161,11 @@ function TaskLinksPopup({
   );
 }
 
+const PROJECT_GROUPS = ['BĐS Miền Bắc', 'BĐS Miền Trung', 'BĐS Miền Nam', 'SSG', 'SCG', 'KLB'];
+
 function TaskEditModal({
   project,
+  projects,
   task,
   allStaff,
   me,
@@ -171,11 +174,12 @@ function TaskEditModal({
   onDeleted
 }: {
   project: Project;
+  projects?: Project[];
   task: Task | null;
   allStaff: Staff[];
   me: Staff;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (movedTo?: Project) => void;
   onDeleted: () => void;
 }) {
   const supabase = createClient();
@@ -187,6 +191,11 @@ function TaskEditModal({
   const dungStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Team Dựng phim');
 
   const [taskName, setTaskName] = useState(task?.task_name ?? '');
+  // Chuyển đầu việc sang dự án khác (chỉ khi Sửa đầu việc): checklist, link, nhân sự… đi theo task_id nên giữ nguyên
+  const [projectId, setProjectId] = useState(project.id);
+  const projectList = (projects && projects.length ? projects : [project]).slice().sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+  const groupKeys = PROJECT_GROUPS.filter((g) => projectList.some((p) => p.group_name === g));
+  const otherProjects = projectList.filter((p) => PROJECT_GROUPS.indexOf(p.group_name) < 0);
   const [mktId, setMktId] = useState(task?.mkt_assignee_id ?? '');
   const [ttthId, setTtthId] = useState(task?.ttth_assignee_id ?? '');
   const [stId, setStId] = useState(task?.st_assignee_id ?? '');
@@ -223,7 +232,8 @@ function TaskEditModal({
     if (!canSave) return;
     setSaving(true);
     const deadlineIso = deadlineDate ? new Date(`${deadlineDate}T${deadlineHour}:00:00`).toISOString() : null;
-    const payload = {
+    const moved = isEdit && projectId !== project.id ? projectList.find((p) => p.id === projectId) ?? null : null;
+    const payload: Record<string, unknown> = {
       task_name: taskName.trim(),
       mkt_assignee_id: mktId || null,
       ttth_assignee_id: ttthId || null,
@@ -231,6 +241,7 @@ function TaskEditModal({
       dung_assignee_id: dungId || null,
       deadline: deadlineIso
     };
+    if (moved) payload.project_id = moved.id;
     if (isEdit && task) {
       await supabase.from('tasks').update(payload).eq('id', task.id);
       const existingGroups = new Set((task.checklist_items ?? []).map((i) => i.item_group));
@@ -253,7 +264,7 @@ function TaskEditModal({
       }
     }
     setSaving(false);
-    onSaved();
+    onSaved(moved ?? undefined);
   }
 
   async function handleDelete() {
@@ -287,6 +298,37 @@ function TaskEditModal({
             ✕
           </button>
         </div>
+
+        {isEdit && (
+          <label style={labelStyle}>
+            Dự án
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={inputStyle}>
+              {groupKeys.map((g) => (
+                <optgroup key={g} label={g}>
+                  {projectList
+                    .filter((p) => p.group_name === g)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+              {otherProjects.length > 0 && (
+                <optgroup label="Khác">
+                  {otherProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {projectId !== project.id && (
+              <span style={{ fontWeight: 500, color: 'var(--st-orange)' }}>Bấm Lưu để chuyển đầu việc này sang dự án mới chọn.</span>
+            )}
+          </label>
+        )}
 
         <label style={labelStyle}>
           Tên đầu việc
@@ -431,6 +473,7 @@ const TASK_COLS = '1.4fr 0.9fr 0.9fr 0.9fr 0.9fr 0.9fr 0.4fr';
 
 export default function ProjectDetailModal({
   project,
+  projects,
   me,
   allStaff,
   tasks,
@@ -438,6 +481,7 @@ export default function ProjectDetailModal({
   onRefetch
 }: {
   project: Project;
+  projects?: Project[];
   me: Staff | null;
   allStaff: Staff[];
   tasks: Task[];
@@ -454,6 +498,7 @@ export default function ProjectDetailModal({
   const [linksTaskId, setLinksTaskId] = useState<string | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [movedMsg, setMovedMsg] = useState('');
   const isMobile = useIsMobile();
 
   async function saveProjectInfo() {
@@ -703,6 +748,12 @@ export default function ProjectDetailModal({
           ))}
         </div>
 
+        {movedMsg && (
+          <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.4, background: 'rgba(46,125,50,0.1)', border: '1px solid rgba(46,125,50,0.35)', color: 'var(--st-green)' }}>
+            {movedMsg}
+          </div>
+        )}
+
         {canManageAnyTask(me) && (
           <div style={{ marginBottom: 6 }}>
             <button
@@ -731,12 +782,14 @@ export default function ProjectDetailModal({
       {editTask && me && (
         <TaskEditModal
           project={project}
+          projects={projects}
           task={editTask}
           allStaff={allStaff}
           me={me}
           onClose={() => setEditTaskId(null)}
-          onSaved={() => {
+          onSaved={(movedTo) => {
             setEditTaskId(null);
+            if (movedTo) setMovedMsg('Đã chuyển đầu việc "' + (editTask.task_name || '') + '" sang dự án "' + movedTo.title + '".');
             onRefetch();
           }}
           onDeleted={() => {

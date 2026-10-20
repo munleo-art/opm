@@ -345,6 +345,76 @@ export default function DashboardTab({
   );
   const overdueCount = overdue.reduce((n, g) => n + g.rows.length, 0);
 
+  // Dự án chưa có đầu việc nào (vừa tạo, hoặc đã chuyển hết đầu việc đi): nằm cuối Dashboard, màu xám.
+  // Bấm tên dự án → cửa sổ dự án → Thêm đầu việc. Ẩn khi đang lọc tuần / lọc nhân sự / xem Việc của tôi.
+  const emptyProjects = useMemo(() => {
+    if (onlyStaffId || win || (teamFilter && staffFilter)) return [];
+    const used: Record<string, boolean> = {};
+    buildRows(projects, tasks, briefs, departments).forEach((r) => (used[r.project.id] = true));
+    const q = query.trim().toLowerCase();
+    return projects
+      .filter((p) => !used[p.id] && (!q || p.title.toLowerCase().includes(q)))
+      .sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+  }, [projects, tasks, briefs, departments, onlyStaffId, win, teamFilter, staffFilter, query]);
+
+  const emptyHeading = (extra?: React.CSSProperties) =>
+    emptyProjects.length > 0 ? (
+      <div
+        style={{
+          padding: '10px 18px',
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0.5,
+          color: 'var(--muted)',
+          background: 'var(--chip)',
+          borderTop: '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
+          ...extra
+        }}
+      >
+        DỰ ÁN CHƯA CÓ ĐẦU VIỆC ({emptyProjects.length}) · bấm vào tên dự án để thêm đầu việc
+      </div>
+    ) : null;
+
+  const renderEmptyProject = (p: Project, variant: 'list' | 'card') =>
+    variant === 'list' ? (
+      <div
+        key={'empty-' + p.id}
+        style={{ display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center', padding: '12px 18px', borderBottom: '1px solid var(--border)', fontSize: 13.5, color: 'var(--muted)', opacity: 0.8 }}
+      >
+        <button
+          onClick={() => onSelectProject(p.id)}
+          style={{ color: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 'inherit', fontFamily: 'inherit', cursor: 'pointer' }}
+        >
+          {p.title}
+        </button>
+        <div style={{ gridColumn: '2 / -1', fontStyle: 'italic' }}>Chưa có đầu việc · {p.group_name || '—'}</div>
+      </div>
+    ) : (
+      <button
+        key={'empty-' + p.id}
+        onClick={() => onSelectProject(p.id)}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          textAlign: 'left',
+          borderRadius: 16,
+          border: '1px dashed var(--border)',
+          background: 'var(--chip)',
+          color: 'var(--muted)',
+          padding: 16,
+          fontFamily: 'inherit',
+          fontSize: 13.5,
+          cursor: 'pointer',
+          opacity: 0.85
+        }}
+      >
+        <span style={{ fontWeight: 600 }}>{p.title}</span>
+        <span style={{ fontSize: 12, fontStyle: 'italic' }}>Chưa có đầu việc · {p.group_name || '—'}</span>
+      </button>
+    );
+
   const selectedRow = rows.find((r) => r.key === selectedRowKey) ?? null;
 
   const renderListRow = (row: WorkRow) => {
@@ -555,7 +625,7 @@ export default function DashboardTab({
             {canAddProject(me) && (
               <button
                 onClick={() => setPipelineOpen(true)}
-                aria-label="Thêm công việc mới"
+                aria-label="Tạo dự án mới"
                 style={{
                   height: 40, padding: '0 14px', border: 'none', borderRadius: 11, background: 'var(--accent)',
                   color: 'var(--accent-contrast)', fontSize: 14, fontWeight: 700, cursor: 'pointer'
@@ -778,8 +848,8 @@ export default function DashboardTab({
           {canAddProject(me) && (
             <button
               onClick={() => setPipelineOpen(true)}
-              aria-label="Thêm công việc mới"
-              title="Thêm công việc mới"
+              aria-label="Tạo dự án mới"
+              title="Tạo dự án mới"
               style={{
                 height: 36,
                 width: 36,
@@ -831,6 +901,8 @@ export default function DashboardTab({
               ))}
             </Fragment>
           ))}
+          {emptyHeading({ borderRadius: 12, marginTop: 8, border: '1px solid var(--border)', padding: '10px 12px' })}
+          {emptyProjects.map((p) => renderEmptyProject(p, 'card'))}
         </div>
       ) : viewMode === 'list' ? (
         <div style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>
@@ -870,6 +942,9 @@ export default function DashboardTab({
               {g.rows.map(renderListRow)}
             </Fragment>
           ))}
+
+          {emptyHeading()}
+          {emptyProjects.map((p) => renderEmptyProject(p, 'list'))}
         </div>
       ) : (
         <div
@@ -889,6 +964,8 @@ export default function DashboardTab({
               {g.rows.map(renderGridCard)}
             </Fragment>
           ))}
+          {emptyHeading({ gridColumn: '1 / -1', borderRadius: 12, border: '1px solid var(--border)' })}
+          {emptyProjects.map((p) => renderEmptyProject(p, 'card'))}
         </div>
       )}
 
