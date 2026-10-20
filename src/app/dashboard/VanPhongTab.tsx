@@ -16,7 +16,7 @@ import { TC, room, buildFloors, fireworks } from '../../lib/office/scene';
 //  done: bấm HOÀN THÀNH CÔNG VIỆC → mở phòng trong 3 ngày đầu thì cả phòng ăn mừng + bắn pháo hoa
 
 type Team = 'mkt' | 'ttth' | 'st' | 'dung';
-interface Person { n: string; full: string; team: Team; g: 'm' | 'f' }
+interface Person { n: string; full: string; team: Team; g: 'm' | 'f'; boss?: 'binh' | 'minh' }
 interface Item {
   id: string;
   name: string;
@@ -32,6 +32,24 @@ interface Proj { id: string; title: string; grp: string; items: Item[]; done: bo
 
 const TEAM_BY_DEPT: Record<string, Team> = { 'Ban Marketing': 'mkt', 'Ban TTTH': 'ttth', 'Ban Sáng tạo': 'st', 'Team Dựng phim': 'dung' };
 const THREE_DAYS = 3 * 24 * 3600 * 1000;
+// 2 sếp lớn: nhân vật vẽ riêng + nhãn tên vàng gold
+const BOSSES: Record<string, { key: 'binh' | 'minh'; label: string }> = {
+  'Hoàng Thị Mỹ Bình': { key: 'binh', label: 'Lam Bình' },
+  'Nguyễn Thị Ngọc Minh': { key: 'minh', label: 'Minh Nguyễn' }
+};
+// Lãnh đạo ghé ngẫu nhiên: đổi danh sách mỗi 30 giây
+const VISIT_EVERY = 30000;
+function rand01(key: string) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 13;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
 
 // Chuỗi CSS → style React (có cache vì nhiều chuỗi lặp lại)
 const sxCache: Record<string, CSSProperties> = {};
@@ -133,9 +151,14 @@ export default function VanPhongTab({
 }) {
   const [pid, setPid] = useState<string | null>(null);
   const [tid, setTid] = useState<string | null>(null);
+  const [tick, setTick] = useState(() => Math.floor(Date.now() / VISIT_EVERY));
+  useEffect(() => {
+    const t = setInterval(() => setTick(Math.floor(Date.now() / VISIT_EVERY)), 5000);
+    return () => clearInterval(t);
+  }, []);
   const { ref, w } = useWidth();
 
-  const { P, WK } = useMemo(() => {
+  const { P, WK, LEADERS } = useMemo(() => {
     const deptName = (s: Staff) => s.department?.name || departments.find((d) => d.id === s.department_id)?.name || '';
     const lastCount: Record<string, number> = {};
     allStaff.forEach((s) => {
@@ -153,7 +176,8 @@ export default function VanPhongTab({
     const person = (s: Staff | null | undefined, fallback: Team): Person | null => {
       if (!ok(s)) return null;
       const st = s as Staff & { gender?: string | null };
-      return { n: short(st.name), full: st.name, team: TEAM_BY_DEPT[deptName(st)] || fallback, g: st.gender === 'Nữ' ? 'f' : 'm' };
+      const bs = BOSSES[st.name];
+      return { n: bs ? bs.label : short(st.name), full: st.name, team: TEAM_BY_DEPT[deptName(st)] || fallback, g: st.gender === 'Nữ' ? 'f' : 'm', boss: bs ? bs.key : undefined };
     };
 
     const now = Date.now();
@@ -245,17 +269,50 @@ export default function VanPhongTab({
       });
     }
     if (!WK.length) WK.push({ n: '', full: '', team: 'st', g: 'm' });
-    return { P, WK };
+    // Lãnh đạo rảnh (Cấp lãnh đạo, không có tên trong đầu việc nào đang làm) → đi lại ngẫu nhiên.
+    // Lãnh đạo đang có việc thì ngồi bàn như bình thường, không đi lại.
+    const busy: Record<string, boolean> = {};
+    P.forEach((p) => p.items.forEach((it) => {
+      if (it.stage === 'done') return;
+      [it.b, it.st, it.dg].forEach((pp) => { if (pp) busy[pp.full] = true; });
+    }));
+    const LEADERS: Person[] = allStaff
+      .filter((s) => ok(s) && s.permission === 'Cấp lãnh đạo' && !busy[s.name])
+      .map((s) => person(s, 'st')!)
+      .sort((a, c) => a.full.localeCompare(c.full, 'vi'));
+    return { P, WK, LEADERS };
   }, [projects, tasks, briefs, departments, allStaff]);
 
   const proj = P.find((p) => p.id === pid) || null;
   const item = proj ? proj.items.find((i) => i.id === tid) || null : null;
   const view: 'map' | 'proj' | 'room' = item ? 'room' : proj ? 'proj' : 'map';
 
-  const floors = useMemo(() => (view === 'map' ? buildFloors(P, WK, (id: string) => { setPid(id); setTid(null); }, w) : []), [view, P, WK, w]);
-  const cards = useMemo(() => (proj && view === 'proj' ? proj.items.map((it) => ({ it, r: room(it, 0.68, false, null) })) : []), [proj, view]);
+  // Chọn ngẫu nhiên lãnh đạo ghé 1 chỗ: thường 0–2 người, đôi khi cả nhóm
+  const visitorsFor = (key: string, cap: number): Person[] => {
+    if (!LEADERS.length) return [];
+    const r = rand01(key + '|' + tick);
+    const n = r < 0.3 ? 0 : r < 0.65 ? 1 : r < 0.9 ? 2 : LEADERS.length;
+    return LEADERS.map((p, i) => ({ p, k: rand01(key + '|' + tick + '|' + i) }))
+      .sort((a, b) => a.k - b.k)
+      .slice(0, Math.min(n, cap))
+      .map((x) => x.p);
+  };
+  const floors = useMemo(
+    () => (view === 'map' ? buildFloors(P, WK, (id: string) => { setPid(id); setTid(null); }, w, (fi: number) => visitorsFor('floor' + fi, 6)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view, P, WK, w, LEADERS, tick]
+  );
+  const cards = useMemo(
+    () => (proj && view === 'proj' ? proj.items.map((it) => ({ it, r: room(it, 0.68, false, { visitors: visitorsFor('room' + it.id, 4) }) })) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [proj, view, LEADERS, tick]
+  );
   const roomScale = Math.min(1.5, Math.max(0.6, (Math.min(w, 760) - 24) / 380));
-  const roomV = useMemo(() => (item ? room(item, roomScale, false, { big: true }) : null), [item, roomScale]);
+  const roomV = useMemo(
+    () => (item ? room(item, roomScale, false, { big: true, visitors: visitorsFor('room' + item.id, 4) }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [item, roomScale, LEADERS, tick]
+  );
   const party = !!item && item.stage === 'done' && item.fresh;
   const fw = useMemo(() => (party ? fireworks() : []), [party]);
 

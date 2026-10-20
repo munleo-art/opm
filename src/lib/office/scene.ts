@@ -42,11 +42,26 @@ export const pix = (rows, map) => {
   rows.forEach((row, r) => { for (let c = 0; c < row.length; c++) { const col = map[row[c]]; if (col) out.push((c * PX + PX / 2) + 'px ' + (r * PX + PX / 2) + 'px 0 ' + (PX / 2 + 0.35) + 'px ' + col); } });
   return out.join(',');
 };
+// 2 sếp lớn: nhân vật vẽ riêng (da trắng, trang phục riêng, nhãn tên vàng gold)
+export const BOSS = {
+  binh: {
+    head: ['...HHHHHH...', '..HHHHHHHHH.', '..HHSSSSSHH.', '..HSESSESSH.', '..SpSSSSpS..', '.GSSSLLSSSG.', '...SSSSSS...', '....SSSS....'],
+    torso: ['..SSSSSSSS..', '..RRRRRRRR..', '...RRRRRR...', '...RrrrrR...', '...RRRRRR...', '..RRRRRRRR..', '..RRRRRRRR..'],
+    arm: ['S', 'S', 'S', 'S'], leg: ['RRRRRRRR', 'RRRRRRRR', 'RRRRRRRR', 'RRRRRRRR', '..BB..BB'], legR: [], legX: [2, 6],
+    map: { H: '#2A1A14', S: '#FFE6D5', E: '#1E1E24', p: '#F6B3B3', R: '#D81E3A', r: '#A8102A', L: '#C8102E', G: '#E8C25A', B: '#C8102E' }
+  },
+  minh: {
+    head: ['...HHHHHH...', '.HHHHHHHHHH.', '.HHSSSSSSHH.', '.HSSESSESSH.', '.HSRSSSSRSH.', '.HSSSLLSSSH.', '.HHSSSSSSHH.', '.HH.SSSS.HH.'],
+    torso: ['.HHVVWWVVHH.', '.HVVVWWVVVH.', '..VVVWWVVV..', '..VVVVVVVV..', '..VVVVGVVV..', '..VVVVVVVV..', '...PPPPPP...'],
+    arm: ['V', 'V', 'V', 'S'], leg: ['PPP', 'PPP', 'PPP', 'PPP', 'BBB'], legX: [3, 6],
+    map: { H: '#3A2418', S: '#FFE6D5', E: '#1E1E24', R: '#F4A7A7', L: '#C8102E', V: '#1F2A44', W: '#FFFFFF', G: '#E8C25A', P: '#2B2F3A', B: '#141414' }
+  }
+};
 export const part = (left, top, extra) => 'position:absolute;left:' + left + 'px;top:' + top + 'px;width:0;height:0;' + (extra || '');
 // mode: type | idle | pace | party | walk
 export const chara = (person, x, y, s, mode, opts, zi) => {
   const o = opts || {}; const t = TC[person.team] || TC.st; const seed = hash(person.full || person.n);
-  const stand = mode === 'pace' || mode === 'party' || mode === 'walk' || !!o.stand;
+  const stand = mode === 'pace' || mode === 'party' || mode === 'walk' || !!o.stand || !!o.still;
   const delay = '-' + ((seed % 10) / 10) + 's';
   const fem = person.g === 'f';
   const headK = (fem ? FEMALE_H : MALE_H)[seed % 4];
@@ -63,23 +78,24 @@ export const chara = (person, x, y, s, mode, opts, zi) => {
   const dy = stand ? 0 : 4 * PX;
   const legAnim = (a) => (mode === 'pace' || mode === 'walk') ? 'animation:' + a + ' ' + (mode === 'walk' ? '.4s' : '.5s') + ' steps(1) infinite;' : '';
   const armAnim = (side) => mode === 'type' ? 'animation:oTypeP .26s steps(1) infinite;animation-delay:' + (side ? '-.13s' : '0s') + ';' : mode === 'party' ? 'transform:rotate(180deg);transform-origin:' + (side ? '0' : '3px') + ' 0;' : '';
+  const boss = person.boss ? BOSS[person.boss] : null;
   const armRows = ['T', 'T', 'T', 'S'];
   const legRows = torsoK === 'dress' ? ['.S.', '.S.', '.S.', '.S.', 'BBB'] : ['PPP', 'PPP', 'PPP', 'PPP', 'BBB'];
-  const bub = { type: '', idle: '☕', pace: '⏳', party: '🎉', walk: '' }[mode];
+  const bub = o.still || o.nobub || (boss && mode === 'pace') ? '' : { type: '', idle: '☕', pace: '⏳', party: '🎉', walk: '' }[mode];
   return {
     n: person.n,
     bb: 'position:absolute;left:' + r1(x - 50) + 'px;top:' + r1(y - 96) + 'px;width:100px;height:96px;transform-origin:50% 100%;transform:scale(' + s + ');pointer-events:none;z-index:' + (zi || 100) + ';',
-    inner,
-    head: part(0, dy, 'box-shadow:' + pix(HEADS[headK], map) + ';'),
+    inner: o.still ? inner.replace(/animation:[^;]*;/g, '') : inner,
+    head: part(0, dy, 'box-shadow:' + pix(boss ? boss.head : HEADS[headK], boss ? boss.map : map) + ';'),
     hair: 'display:none;', eyeL: 'display:none;', eyeR: 'display:none;',
-    body: part(0, dy + 8 * PX, 'box-shadow:' + pix(TORSO[torsoK], map) + ';'),
-    armL: part(1 * PX, dy + 9 * PX, 'box-shadow:' + pix(armRows, { T: t.c, S: map.S }) + ';' + armAnim(0)),
-    armR: part(10 * PX, dy + 9 * PX, 'box-shadow:' + pix(armRows, { T: t.c, S: map.S }) + ';' + armAnim(1)),
-    legL: part(3 * PX, 15 * PX, 'display:' + (stand ? 'block' : 'none') + ';box-shadow:' + pix(legRows, map) + ';' + legAnim('oLegA')),
-    legR: part(6 * PX, 15 * PX, 'display:' + (stand ? 'block' : 'none') + ';box-shadow:' + pix(legRows, map) + ';' + legAnim('oLegB')),
+    body: part(0, dy + 8 * PX, 'box-shadow:' + pix(boss ? boss.torso : TORSO[torsoK], boss ? boss.map : map) + ';'),
+    armL: part(1 * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(0)),
+    armR: part(10 * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(1)),
+    legL: part((boss ? boss.legX[0] : 3) * PX, 15 * PX, 'display:' + (stand ? 'block' : 'none') + ';box-shadow:' + (boss ? pix(boss.leg, boss.map) : pix(legRows, map)) + ';' + (boss && boss.legR ? '' : legAnim('oLegA'))),
+    legR: part((boss ? boss.legX[1] : 6) * PX, 15 * PX, 'display:' + (stand && !(boss && boss.legR) ? 'block' : 'none') + ';box-shadow:' + (boss ? pix(boss.leg, boss.map) : pix(legRows, map)) + ';' + legAnim('oLegB')),
     bub: 'position:absolute;top:' + ((o.tag ? -34 : -18) + dy) + 'px;left:28px;font-size:13px;display:' + (bub ? 'block' : 'none') + ';',
     bubT: bub,
-    tag: 'position:absolute;top:' + (-16 + dy) + 'px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:' + t.t + ';color:' + t.d + ';box-shadow:0 0 0 1.5px ' + t.c + ';display:' + (o.tag ? 'block' : 'none') + ';font-family:ui-monospace,Menlo,monospace;'
+    tag: 'position:absolute;top:' + (-16 + dy) + 'px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:' + (boss ? 'linear-gradient(180deg,#FFE58A,#E8B923)' : t.t) + ';color:' + (boss ? '#5A3E00' : t.d) + ';box-shadow:0 0 0 1.5px ' + (boss ? '#B8860B' : t.c) + ';display:' + (o.tag ? 'block' : 'none') + ';font-family:ui-monospace,Menlo,monospace;'
   };
 };
 
@@ -211,6 +227,12 @@ export const room = (it, k, dark, opt) => {
     }
     desks.push({ mode });
   });
+  // Lãnh đạo ghé phòng: đi qua đi lại ở khoảng sàn trống phía trước các bàn
+  ((opt && opt.visitors) || []).forEach((v, vi) => {
+    const vx = 46 + ((vi * 67) % 150), vy = 196 + (vi % 2) * 22;
+    const pv = AT(vx, vy, 0);
+    chars.push(chara(v, pv[0], pv[1], big ? 1.1 : 1, 'pace', { tag: big, nobub: true }, 100 + Math.round(vx + vy)));
+  });
   return {
     stage: 'position:absolute;inset:0;',
     wrap: 'position:absolute;left:50%;top:' + (big ? '50%' : '52%') + ';width:0;height:0;transform:scale(' + k + ');',
@@ -221,7 +243,7 @@ export const room = (it, k, dark, opt) => {
 
 // ---------- Không gian tổng: mỗi khối BĐS Miền Bắc/Trung/Nam/CORP = 1 sàn, mỗi dự án = 1 căn phòng ----------
 export const FLOORS = [['BĐS Miền Bắc', ['BĐS Miền Bắc']], ['BĐS Miền Trung', ['BĐS Miền Trung']], ['BĐS Miền Nam', ['BĐS Miền Nam']], ['CORP', ['SSG', 'SCG', 'KLB']]];
-export const buildFloors = (P, WK, onOpen, maxW) => {
+export const buildFloors = (P, WK, onOpen, maxW, floorVisitors) => {
 const T = 150, GAP = 90, COLS = 4, MH = 34, SLAB = 16;
 let wi = 0;
 return FLOORS.map(([name, grps], fi) => {
@@ -279,7 +301,7 @@ return FLOORS.map(([name, grps], fi) => {
     });
   });
   // Người đi lại trong hành lang của sàn (hành lang ngang và dọc giữa các phòng)
-  const walkers = list.length ? [0, 1, 2].map(j => {
+  let walkers = list.length ? [0, 1, 2].map(j => {
     const w = WK[(wi++) % WK.length];
     const horiz = j !== 1;
     const lane = horiz ? (j === 0 ? 0 : nRows) : Math.min(1, nCols);
@@ -293,6 +315,20 @@ return FLOORS.map(([name, grps], fi) => {
       ch: chara(w, 0, 0, .9, 'walk')
     };
   }) : [];
+  // Lãnh đạo ghé sàn (ngẫu nhiên): đi lại dọc các hành lang
+  ((floorVisitors && floorVisitors(fi)) || []).forEach((v, j) => {
+    const horiz = j % 2 === 0;
+    const lane = horiz ? (j / 2) % (nRows + 1) : (Math.floor(j / 2) + 1) % (nCols + 1);
+    const fixed = lane * (T + GAP) + GAP / 2;
+    const len = (horiz ? FW : FD) - 60;
+    const st = horiz ? A(30, fixed, 0) : A(fixed, 30, 0);
+    const dx = horiz ? len * 0.7071 : -len * 0.7071, dy = len * 0.3536;
+    const dur = 16 + (j * 5) % 9;
+    walkers.push({
+      track: 'position:absolute;left:' + r1(st[0]) + 'px;top:' + r1(st[1]) + 'px;width:0;height:0;z-index:5001;--dx:' + r1(dx) + 'px;--dy:' + r1(dy) + 'px;animation:oWalk ' + dur + 's linear infinite alternate;animation-delay:-' + (j * 7 + 3) + 's;',
+      ch: chara(v, 0, 0, .95, 'walk', { tag: true })
+    });
+  });
   const KF = Math.min(.8, Math.max(.3, (maxW - 16) / ((FW + FD) * 0.7071 + 40)));
   const H = ((FW + FD) * 0.3536 + MH * 0.866 + SLAB) * KF + 70;
   const openN = list.filter(p => !p.done).length;
