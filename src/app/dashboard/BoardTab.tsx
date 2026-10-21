@@ -59,7 +59,8 @@ export default function BoardTab({
   tasks,
   allStaff,
   me,
-  onRefetch
+  onRefetch,
+  onPatchTask
 }: {
   boardKey: BoardKey;
   project: Project | null;
@@ -67,6 +68,7 @@ export default function BoardTab({
   allStaff: Staff[];
   me: Staff | null;
   onRefetch: () => void;
+  onPatchTask?: (id: string, patch: Record<string, unknown>) => void;
 }) {
   const supabase = createClient();
   const PROJ = boardKey === 'q6' ? 'Q6' : 'Q9';
@@ -133,13 +135,16 @@ export default function BoardTab({
     await supabase.from('board_sections').upsert(row, { onConflict: 'project_id,section' });
     load();
   }
+  // Tình trạng / Hoàn thành: đổi ngay trên màn hình rồi mới ghi xuống DB (không tải lại toàn bộ)
   async function setStatus(taskId: string, text: string) {
-    await supabase.from('tasks').update({ status_note: text || null }).eq('id', taskId);
-    onRefetch();
+    if (onPatchTask) onPatchTask(taskId, { status_note: text || null });
+    const { error } = await supabase.from('tasks').update({ status_note: text || null }).eq('id', taskId);
+    if (error || !onPatchTask) onRefetch();
   }
   async function toggleDone(t: BoardTask) {
-    await supabase.from('tasks').update({ completed: !t.completed }).eq('id', t.id);
-    onRefetch();
+    if (onPatchTask) onPatchTask(t.id, { completed: !t.completed });
+    const { error } = await supabase.from('tasks').update({ completed: !t.completed }).eq('id', t.id);
+    if (error || !onPatchTask) onRefetch();
   }
   async function addLink(section: string, col: string, title: string, url: string) {
     if (!pid || !url.trim()) return;

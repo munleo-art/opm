@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { createClient } from '../../../lib/supabase/client';
 import type { Staff, Project, Task, Brief, Department, NotificationRow } from '../../../lib/types';
 import { buildRows } from '../../../lib/workRows';
@@ -9,21 +10,24 @@ import { canAddProject, canSeeAdmin } from '../../../lib/permissions';
 import { useIsMobile } from '../../../lib/useIsMobile';
 import type { UiVersion } from '../../../lib/uiVersion';
 import DashboardTab from '../DashboardTab';
-import CalendarTab from '../CalendarTab';
-import NotesTab from '../NotesTab';
-import PhanCongTab from '../PhanCongTab';
-import VanPhongTab from '../VanPhongTab';
-import BoardTab from '../BoardTab';
 import { boardKeyOf } from '../../../lib/board';
-import AccountTab from '../AccountTab';
 import ThemeControls from '../ThemeControls';
 import LogoutButton from '../LogoutButton';
 import Avatar from '../Avatar';
-import ProjectPipelineModal from '../ProjectPipelineModal';
-import ReportShell from '../../admin/bao-cao/ReportShell';
-import OverviewView from './OverviewView';
 import ProjectsBoard, { GROUP_OPTIONS } from './ProjectsBoard';
-import StaffView from './StaffView';
+
+// Các màn hình ít dùng chỉ tải khi mở tới (giảm dung lượng tải lúc mở OPM)
+const viewLoading = () => <div style={{ padding: 24, fontSize: 13.5, color: 'var(--muted)' }}>Đang tải...</div>;
+const CalendarTab = dynamic(() => import('../CalendarTab'), { ssr: false, loading: viewLoading });
+const NotesTab = dynamic(() => import('../NotesTab'), { ssr: false, loading: viewLoading });
+const PhanCongTab = dynamic(() => import('../PhanCongTab'), { ssr: false, loading: viewLoading });
+const VanPhongTab = dynamic(() => import('../VanPhongTab'), { ssr: false, loading: viewLoading });
+const BoardTab = dynamic(() => import('../BoardTab'), { ssr: false, loading: viewLoading });
+const AccountTab = dynamic(() => import('../AccountTab'), { ssr: false, loading: viewLoading });
+const ProjectPipelineModal = dynamic(() => import('../ProjectPipelineModal'), { ssr: false, loading: viewLoading });
+const ReportShell = dynamic(() => import('../../admin/bao-cao/ReportShell'), { ssr: false, loading: viewLoading });
+const OverviewView = dynamic(() => import('./OverviewView'), { ssr: false, loading: viewLoading });
+const StaffView = dynamic(() => import('./StaffView'), { ssr: false, loading: viewLoading });
 
 // GIAO DIỆN MỚI (bật trong bảng "Giao diện" → Kiểu giao diện → Giao diện mới).
 // Chỉ thay KHUNG (menu trái). Dashboard, Lịch, Ghi chú, Tài khoản, Báo cáo dùng lại đúng component
@@ -91,6 +95,9 @@ export default function NewShell({
   briefs,
   notifications,
   onRefetch,
+  onRefetchNotifs,
+  onPatchTask,
+  onRefetchAll,
   onSelectProject,
   uiVersion,
   onChangeUi,
@@ -104,6 +111,9 @@ export default function NewShell({
   briefs: Brief[];
   notifications: NotificationRow[];
   onRefetch: () => void;
+  onRefetchNotifs?: () => void;
+  onPatchTask?: (id: string, patch: Record<string, unknown>) => void;
+  onRefetchAll?: () => void;
   onSelectProject: (id: string) => void;
   uiVersion: UiVersion;
   onChangeUi: (v: UiVersion) => void;
@@ -150,7 +160,7 @@ export default function NewShell({
     if (opening && unreadCount > 0) {
       const unreadIds = notifications.filter((n) => !n.read_at).map((n) => n.notification_id);
       await createClient().from('notification_recipients').update({ read_at: new Date().toISOString() }).in('notification_id', unreadIds);
-      onRefetch();
+      (onRefetchNotifs || onRefetch)();
     }
   }
 
@@ -457,7 +467,7 @@ export default function NewShell({
       )}
       {view === 'ghichu' && <NotesTab me={me} />}
       {(view === 'q6' || view === 'q9') && (
-        <BoardTab key={view} boardKey={view} project={projects.find((p) => boardKeyOf(p) === view) ?? null} tasks={tasks} allStaff={allStaff} me={me} onRefetch={onRefetch} />
+        <BoardTab key={view} boardKey={view} project={projects.find((p) => boardKeyOf(p) === view) ?? null} tasks={tasks} allStaff={allStaff} me={me} onRefetch={onRefetch} onPatchTask={onPatchTask} />
       )}
       {view === 'vanphong' && (
         <VanPhongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
@@ -511,7 +521,7 @@ export default function NewShell({
           <ReportShell embedded />
         </div>
       )}
-      {view === 'taikhoan' && <AccountTab me={me} onRefetch={onRefetch} uiVersion={uiVersion} onChangeUi={onChangeUi} />}
+      {view === 'taikhoan' && <AccountTab me={me} onRefetch={onRefetchAll || onRefetch} uiVersion={uiVersion} onChangeUi={onChangeUi} />}
     </>
   );
 

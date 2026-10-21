@@ -1,28 +1,37 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { createClient } from '../../lib/supabase/client';
 import type { Staff, Project, Task, Brief, Department, NotificationRow } from '../../lib/types';
 import LogoutButton from './LogoutButton';
 import NotificationBell from './NotificationBell';
 import Avatar from './Avatar';
-import AccountTab from './AccountTab';
 import ThemeControls from './ThemeControls';
 import DashboardTab from './DashboardTab';
-import CalendarTab from './CalendarTab';
-import NotesTab from './NotesTab';
-import PhanCongTab from './PhanCongTab';
-import VanPhongTab from './VanPhongTab';
-import BoardTab from './BoardTab';
 import { boardKeyOf } from '../../lib/board';
-import ProjectsTab from './ProjectsTab';
-import BriefTab from './BriefTab';
 import ProjectDetailModal from './ProjectDetailModal';
-import AddProjectModal from './AddProjectModal';
 import { canAddProject, visibleStaff } from '../../lib/permissions';
 import { useTheme } from '../../lib/ThemeProvider';
 import { readUiVersion, saveUiVersion, type UiVersion } from '../../lib/uiVersion';
-import NewShell from './v2/NewShell';
+
+
+// Các tab / cửa sổ ít dùng chỉ tải khi mở tới (giảm dung lượng tải lúc mở OPM)
+const tabLoading = () => <div style={{ padding: 24, fontSize: 13.5, color: 'var(--muted)' }}>Đang tải...</div>;
+const CalendarTab = dynamic(() => import('./CalendarTab'), { ssr: false, loading: tabLoading });
+const NotesTab = dynamic(() => import('./NotesTab'), { ssr: false, loading: tabLoading });
+const PhanCongTab = dynamic(() => import('./PhanCongTab'), { ssr: false, loading: tabLoading });
+const VanPhongTab = dynamic(() => import('./VanPhongTab'), { ssr: false, loading: tabLoading });
+const BoardTab = dynamic(() => import('./BoardTab'), { ssr: false, loading: tabLoading });
+const ProjectsTab = dynamic(() => import('./ProjectsTab'), { ssr: false, loading: tabLoading });
+const BriefTab = dynamic(() => import('./BriefTab'), { ssr: false, loading: tabLoading });
+const AccountTab = dynamic(() => import('./AccountTab'), { ssr: false, loading: tabLoading });
+const AddProjectModal = dynamic(() => import('./AddProjectModal'), { ssr: false, loading: tabLoading });
+const NewShell = dynamic(() => import('./v2/NewShell'), { ssr: false, loading: tabLoading });
+
+const TASK_SELECT =
+  '*, assignee:staff!tasks_assignee_id_fkey(*, department:departments(id, name)), mkt_assignee:staff!tasks_mkt_assignee_id_fkey(*, department:departments(id, name)), st_assignee:staff!tasks_st_assignee_id_fkey(*, department:departments(id, name)), dung_assignee:staff!tasks_dung_assignee_id_fkey(*, department:departments(id, name)), ttth_assignee:staff!tasks_ttth_assignee_id_fkey(*, department:departments(id, name)), checklist_items(*)';
+const NOTIF_LIMIT = 50;
 
 export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'q6' | 'q9' | 'duan' | 'brief' | 'taikhoan';
 
@@ -47,6 +56,36 @@ export default function AppShell() {
   const [uiVersion, setUiVersion] = useState<UiVersion>('old');
   const uiLoadedFor = useRef<string | null>(null);
 
+  // Chỉ tải lại phần công việc (dự án, đầu việc, brief) sau mỗi thao tác — không kéo lại nhân sự/thông báo
+  const fetchWork = useCallback(async () => {
+    const [{ data: projectData }, { data: taskData }, { data: briefData }] = await Promise.all([
+      supabase.from('projects').select('*').order('title'),
+      supabase.from('tasks').select(TASK_SELECT).order('created_at'),
+      supabase
+        .from('briefs')
+        .select('*, poster:staff!briefs_posted_by_fkey(*, department:departments(id, name))')
+        .order('posted_at', { ascending: false })
+    ]);
+    if (projectData) setProjects(projectData as any);
+    if (taskData) setTasks(taskData as any);
+    if (briefData) setBriefs(briefData as any);
+  }, [supabase]);
+
+  // Thông báo: chỉ 50 cái gần nhất
+  const fetchNotifs = useCallback(async () => {
+    const { data } = await supabase
+      .from('notification_recipients')
+      .select('*, notification:notifications(*)')
+      .order('notification_id', { ascending: false })
+      .limit(NOTIF_LIMIT);
+    if (data) setNotifications(data as any);
+  }, [supabase]);
+
+  // Sửa nhanh 1 đầu việc ngay trên màn hình (tick hoàn thành, tình trạng…) rồi mới ghi xuống DB
+  const patchTask = useCallback((id: string, patch: Partial<Task> & Record<string, unknown>) => {
+    setTasks((ts) => ts.map((t) => (t.id === id ? ({ ...t, ...patch } as Task) : t)));
+  }, []);
+
   const fetchAll = useCallback(async () => {
     const {
       data: { user }
@@ -70,12 +109,7 @@ export default function AppShell() {
       supabase.from('staff').select('*, department:departments(id, name)').order('name'),
       supabase.from('departments').select('*'),
       supabase.from('projects').select('*').order('title'),
-      supabase
-        .from('tasks')
-        .select(
-          '*, assignee:staff!tasks_assignee_id_fkey(*, department:departments(id, name)), mkt_assignee:staff!tasks_mkt_assignee_id_fkey(*, department:departments(id, name)), st_assignee:staff!tasks_st_assignee_id_fkey(*, department:departments(id, name)), dung_assignee:staff!tasks_dung_assignee_id_fkey(*, department:departments(id, name)), ttth_assignee:staff!tasks_ttth_assignee_id_fkey(*, department:departments(id, name)), checklist_items(*)'
-        )
-        .order('created_at'),
+      supabase.from('tasks').select(TASK_SELECT).order('created_at'),
       supabase
         .from('briefs')
         .select('*, poster:staff!briefs_posted_by_fkey(*, department:departments(id, name))')
@@ -84,6 +118,7 @@ export default function AppShell() {
         .from('notification_recipients')
         .select('*, notification:notifications(*)')
         .order('notification_id', { ascending: false })
+        .limit(NOTIF_LIMIT)
     ]);
 
     setMe((meData as any) ?? null);
@@ -145,14 +180,14 @@ export default function AppShell() {
           filter: 'staff_id=eq.${me.id}'
         },
         () => {
-          fetchAll();
+          fetchNotifs();
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [me, supabase, fetchAll]);
+  }, [me, supabase, fetchNotifs]);
 
   if (loading) {
     return (
@@ -183,7 +218,10 @@ export default function AppShell() {
         tasks={tasks}
         briefs={briefs}
         notifications={notifications}
-        onRefetch={fetchAll}
+        onRefetch={fetchWork}
+        onRefetchNotifs={fetchNotifs}
+        onPatchTask={patchTask}
+        onRefetchAll={fetchAll}
         onSelectProject={(id) => openProject(id)}
         uiVersion={uiVersion}
         onChangeUi={changeUi}
@@ -196,7 +234,7 @@ export default function AppShell() {
             allStaff={allStaff}
             tasks={tasks.filter((t) => t.project_id === selectedProject.id)}
             onClose={() => setSelectedProjectId(null)}
-            onRefetch={fetchAll}
+            onRefetch={fetchWork}
           />
         )}
       </NewShell>
@@ -253,7 +291,7 @@ export default function AppShell() {
               onOpenProject={(projectId) => {
                 openProject(projectId);
               }}
-              onRefetch={fetchAll}
+              onRefetch={fetchNotifs}
             />
             {/* Trên điện thoại: chỉnh giao diện + Đăng xuất nằm trong trang Tài khoản (bấm avatar) cho header gọn */}
             <span className="m-hide" style={{ display: 'contents' }}>
@@ -332,12 +370,12 @@ export default function AppShell() {
             allStaff={allStaff}
             me={me}
             onSelectProject={(id) => openProject(id)}
-            onRefetch={fetchAll}
+            onRefetch={fetchWork}
           />
         )}
         {activeTab === 'ghichu' && <NotesTab me={me} />}
         {(activeTab === 'q6' || activeTab === 'q9') && (
-          <BoardTab key={activeTab} boardKey={activeTab} project={boardProject(activeTab)} tasks={tasks} allStaff={allStaff} me={me} onRefetch={fetchAll} />
+          <BoardTab key={activeTab} boardKey={activeTab} project={boardProject(activeTab)} tasks={tasks} allStaff={allStaff} me={me} onRefetch={fetchWork} onPatchTask={patchTask} />
         )}
         {activeTab === 'vanphong' && (
           <VanPhongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
@@ -353,7 +391,7 @@ export default function AppShell() {
             departments={departments}
             allStaff={allStaff}
             me={me}
-            onRefetch={fetchAll}
+            onRefetch={fetchWork}
           />
         )}
         {activeTab === 'duan' && (
@@ -379,7 +417,7 @@ export default function AppShell() {
           allStaff={allStaff}
           tasks={tasks.filter((t) => t.project_id === selectedProject.id)}
           onClose={() => setSelectedProjectId(null)}
-          onRefetch={fetchAll}
+          onRefetch={fetchWork}
         />
       )}
 
