@@ -44,13 +44,19 @@ export const pix = (rows, map) => {
 };
 // 2 sếp lớn: nhân vật vẽ riêng (da trắng, trang phục riêng, nhãn tên vàng gold)
 export const BOSS = {
-  binh: {
+  linh: {
+    head: ['...HHHHHH...', '.HHHHHHHHHH.', '.HHSSSSSSHH.', '.HOOObbOOOH.', '.HSOOSSOOSH.', '.HSSSLLSSSH.', '.HHSSSSSSHH.', '.HH.SSSS.HH.'],
+    torso: ['.HHkkkkkkHH.', '.HkkkkkkkkH.', '..kkkkkkkk..', '..kkqkkkkk..', '...kkkkkk...', '..kkkkkkkk..', '..kkkkkkkk..'],
+    arm: ['S', 'S', 'S', 'S'], leg: ['kkkk', 'kkkk', '.SS.', '.SS.', '.BB.'], legX: [2, 6], cigar: true,
+    map: { H: '#0E0E10', S: '#FFE6D5', O: '#0B0B0D', b: '#3A3A40', L: '#B0102A', k: '#16161A', q: '#34343C', B: '#0B0B0D' }
+  },
+  binh: { gold: true,
     head: ['...HHHHHH...', '..HHHHHHHHH.', '..HHSSSSSHH.', '..HSESSESSH.', '..SpSSSSpS..', '.GSSSLLSSSG.', '...SSSSSS...', '....SSSS....'],
     torso: ['..SSSSSSSS..', '..RRRRRRRR..', '...RRRRRR...', '...RrrrrR...', '...RRRRRR...', '..RRRRRRRR..', '..RRRRRRRR..'],
     arm: ['S', 'S', 'S', 'S'], leg: ['RRRRRRRR', 'RRRRRRRR', 'RRRRRRRR', 'RRRRRRRR', '..BB..BB'], legR: [], legX: [2, 6],
     map: { H: '#2A1A14', S: '#FFE6D5', E: '#1E1E24', p: '#F6B3B3', R: '#D81E3A', r: '#A8102A', L: '#C8102E', G: '#E8C25A', B: '#C8102E' }
   },
-  minh: {
+  minh: { gold: true,
     head: ['...HHHHHH...', '.HHHHHHHHHH.', '.HHSSSSSSHH.', '.HSSESSESSH.', '.HSRSSSSRSH.', '.HSSSLLSSSH.', '.HHSSSSSSHH.', '.HH.SSSS.HH.'],
     torso: ['.HHVVWWVVHH.', '.HVVVWWVVVH.', '..VVVWWVVV..', '..VVVVVVVV..', '..VVVVGVVV..', '..VVVVVVVV..', '...PPPPPP...'],
     arm: ['V', 'V', 'V', 'S'], leg: ['PPP', 'PPP', 'PPP', 'PPP', 'BBB'], legX: [3, 6],
@@ -89,13 +95,21 @@ export const chara = (person, x, y, s, mode, opts, zi) => {
     head: part(0, dy, 'box-shadow:' + pix(boss ? boss.head : HEADS[headK], boss ? boss.map : map) + ';'),
     hair: 'display:none;', eyeL: 'display:none;', eyeR: 'display:none;',
     body: part(0, dy + 8 * PX, 'box-shadow:' + pix(boss ? boss.torso : TORSO[torsoK], boss ? boss.map : map) + ';'),
-    armL: part(1 * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(0)),
-    armR: part(10 * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(1)),
+    armL: part((boss && boss.cigar ? 10 : 1) * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(0)),
+    armR: boss && boss.cigar
+      ? part(1 * PX, dy + 5 * PX, 'box-shadow:' + pix(['S', 'S', 'S', 'S', 'k', 'k'], boss.map) + ';')
+      : part(10 * PX, dy + 9 * PX, 'box-shadow:' + (boss ? pix(boss.arm, boss.map) : pix(armRows, { T: t.c, S: map.S })) + ';' + armAnim(1)),
     legL: part((boss ? boss.legX[0] : 3) * PX, 15 * PX, 'display:' + (stand ? 'block' : 'none') + ';box-shadow:' + (boss ? pix(boss.leg, boss.map) : pix(legRows, map)) + ';' + (boss && boss.legR ? '' : legAnim('oLegA'))),
     legR: part((boss ? boss.legX[1] : 6) * PX, 15 * PX, 'display:' + (stand && !(boss && boss.legR) ? 'block' : 'none') + ';box-shadow:' + (boss ? pix(boss.leg, boss.map) : pix(legRows, map)) + ';' + legAnim('oLegB')),
     bub: 'position:absolute;top:' + ((o.tag ? -34 : -18) + dy) + 'px;left:28px;font-size:13px;display:' + (bub ? 'block' : 'none') + ';',
     bubT: bub,
-    tag: 'position:absolute;top:' + (-16 + dy) + 'px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:' + (boss ? 'linear-gradient(180deg,#FFE58A,#E8B923)' : t.t) + ';color:' + (boss ? '#5A3E00' : t.d) + ';box-shadow:0 0 0 1.5px ' + (boss ? '#B8860B' : t.c) + ';display:' + (o.tag ? 'block' : 'none') + ';font-family:ui-monospace,Menlo,monospace;'
+    // xì gà trên tay phải + khói phì phèo (chỉ nhân vật có cigar)
+    cig: 'position:absolute;left:-8px;top:1px;width:9px;height:3px;background:#6B3E1F;box-shadow:inset -2px 0 0 #8A5530;display:' + (boss && boss.cigar ? 'block' : 'none') + ';',
+    ember: 'position:absolute;left:-10px;top:1px;width:2px;height:3px;background:#FF5A1F;box-shadow:0 0 4px 1px rgba(255,120,40,.85);animation:oEmber 1.6s steps(2) infinite;display:' + (boss && boss.cigar ? 'block' : 'none') + ';',
+    sm1: 'position:absolute;left:-13px;top:-5px;width:5px;height:5px;border-radius:50%;background:rgba(210,214,220,.85);animation:oSmokeL 2.4s ease-out infinite;display:' + (boss && boss.cigar ? 'block' : 'none') + ';',
+    sm2: 'position:absolute;left:-13px;top:-5px;width:5px;height:5px;border-radius:50%;background:rgba(210,214,220,.8);animation:oSmokeL 2.4s ease-out infinite;animation-delay:-.8s;display:' + (boss && boss.cigar ? 'block' : 'none') + ';',
+    sm3: 'position:absolute;left:-13px;top:-5px;width:5px;height:5px;border-radius:50%;background:rgba(210,214,220,.75);animation:oSmokeL 2.4s ease-out infinite;animation-delay:-1.6s;display:' + (boss && boss.cigar ? 'block' : 'none') + ';',
+    tag: 'position:absolute;top:' + (-16 + dy) + 'px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:' + (boss && boss.gold ? 'linear-gradient(180deg,#FFE58A,#E8B923)' : t.t) + ';color:' + (boss && boss.gold ? '#5A3E00' : t.d) + ';box-shadow:0 0 0 1.5px ' + (boss && boss.gold ? '#B8860B' : t.c) + ';display:' + (o.tag ? 'block' : 'none') + ';font-family:ui-monospace,Menlo,monospace;'
   };
 };
 
@@ -229,7 +243,8 @@ export const room = (it, k, dark, opt) => {
   });
   // Lãnh đạo ghé phòng: đi qua đi lại ở khoảng sàn trống phía trước các bàn
   ((opt && opt.visitors) || []).forEach((v, vi) => {
-    const vx = 46 + ((vi * 67) % 150), vy = 196 + (vi % 2) * 22;
+    const VP = [[60, 222], [212, 186], [140, 228], [226, 220]];
+    const vx = VP[vi % 4][0], vy = VP[vi % 4][1];
     const pv = AT(vx, vy, 0);
     chars.push(chara(v, pv[0], pv[1], big ? 1.1 : 1, 'pace', { tag: big, nobub: true }, 100 + Math.round(vx + vy)));
   });

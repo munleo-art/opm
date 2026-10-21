@@ -16,7 +16,7 @@ import { TC, room, buildFloors, fireworks } from '../../lib/office/scene';
 //  done: bấm HOÀN THÀNH CÔNG VIỆC → mở phòng trong 3 ngày đầu thì cả phòng ăn mừng + bắn pháo hoa
 
 type Team = 'mkt' | 'ttth' | 'st' | 'dung';
-interface Person { n: string; full: string; team: Team; g: 'm' | 'f'; boss?: 'binh' | 'minh' }
+interface Person { n: string; full: string; team: Team; g: 'm' | 'f'; boss?: 'binh' | 'minh' | 'linh' }
 interface Item {
   id: string;
   name: string;
@@ -33,9 +33,11 @@ interface Proj { id: string; title: string; grp: string; items: Item[]; done: bo
 const TEAM_BY_DEPT: Record<string, Team> = { 'Ban Marketing': 'mkt', 'Ban TTTH': 'ttth', 'Ban Sáng tạo': 'st', 'Team Dựng phim': 'dung' };
 const THREE_DAYS = 3 * 24 * 3600 * 1000;
 // 2 sếp lớn: nhân vật vẽ riêng + nhãn tên vàng gold
-const BOSSES: Record<string, { key: 'binh' | 'minh'; label: string }> = {
+// + nhân vật riêng của chị Thảo Linh (váy đen, kính râm, xì gà có khói) — nhãn tên theo màu ban như mọi người
+const BOSSES: Record<string, { key: 'binh' | 'minh' | 'linh'; label: string }> = {
   'Hoàng Thị Mỹ Bình': { key: 'binh', label: 'Lam Bình' },
-  'Nguyễn Thị Ngọc Minh': { key: 'minh', label: 'Minh Nguyễn' }
+  'Nguyễn Thị Ngọc Minh': { key: 'minh', label: 'Minh Nguyễn' },
+  'Lê Thảo Linh': { key: 'linh', label: 'Thảo Linh' }
 };
 // Lãnh đạo ghé ngẫu nhiên: đổi danh sách mỗi 30 giây
 const VISIT_EVERY = 30000;
@@ -78,6 +80,8 @@ const KEYFRAMES = `
 @keyframes oBob{0%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes oLegA{0%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes oLegB{0%{transform:translateY(-3px)}50%{transform:translateY(0)}}
+@keyframes oSmokeL{0%{transform:translate(0,0) scale(.5);opacity:0}15%{opacity:.9}100%{transform:translate(-7px,-22px) scale(1.9);opacity:0}}
+@keyframes oEmber{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes oGlow{0%,100%{opacity:.75}50%{opacity:1}}
 @keyframes oWalk{from{transform:translate(0,0)}to{transform:translate(var(--dx),var(--dy))}}
 @keyframes oFw{0%{transform:translate(0,0) scale(1.2);opacity:0}8%{opacity:1}75%{opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + 30px)) scale(.3);opacity:0}}
@@ -92,7 +96,13 @@ function Chara({ c }: { c: any }) {
         <div style={sx(c.legR)} />
         <div style={sx(c.body)} />
         <div style={sx(c.armL)} />
-        <div style={sx(c.armR)} />
+        <div style={sx(c.armR)}>
+          <div style={sx(c.cig)} />
+          <div style={sx(c.ember)} />
+          <div style={sx(c.sm1)} />
+          <div style={sx(c.sm2)} />
+          <div style={sx(c.sm3)} />
+        </div>
         <div style={sx(c.head)} />
         <div style={sx(c.bub)}>{c.bubT}</div>
         <div style={sx(c.tag)}>{c.n}</div>
