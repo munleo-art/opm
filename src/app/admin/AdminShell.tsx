@@ -262,7 +262,7 @@ export default function AdminShell() {
                     borderBottom: '1px solid var(--border)'
                   }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{st.name}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{st.name}{(st as { resigned?: boolean }).resigned && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: '#C63C3C', background: '#FDECEC', borderRadius: 999, padding: '1px 7px' }}>Đã nghỉ</span>}</div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{formatDob(st.date_of_birth)}</div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{st.employee_id}</div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{st.position || '—'}</div>

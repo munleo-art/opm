@@ -29,7 +29,7 @@ export default function AssignTaskModal({
   const [taskType, setTaskType] = useState(TASK_TYPES[0]);
   const [taskName, setTaskName] = useState('');
   const [briefLink, setBriefLink] = useState('');
-  const assignable = visibleStaff(allStaff, me).filter((s) => ASSIGNABLE_DEPTS.includes(s.department?.name ?? ''));
+  const assignable = visibleStaff(allStaff, me).filter((s) => !(s as { resigned?: boolean }).resigned).filter((s) => ASSIGNABLE_DEPTS.includes(s.department?.name ?? ''));
   const [assigneeId, setAssigneeId] = useState(assignable[0]?.id ?? '');
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineHour, setDeadlineHour] = useState('09');

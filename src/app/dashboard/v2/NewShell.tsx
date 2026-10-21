@@ -13,6 +13,8 @@ import CalendarTab from '../CalendarTab';
 import NotesTab from '../NotesTab';
 import PhanCongTab from '../PhanCongTab';
 import VanPhongTab from '../VanPhongTab';
+import BoardTab from '../BoardTab';
+import { boardKeyOf } from '../../../lib/board';
 import AccountTab from '../AccountTab';
 import ThemeControls from '../ThemeControls';
 import LogoutButton from '../LogoutButton';
@@ -27,7 +29,7 @@ import StaffView from './StaffView';
 // Chỉ thay KHUNG (menu trái). Dashboard, Lịch, Ghi chú, Tài khoản, Báo cáo dùng lại đúng component
 // của giao diện cũ nên mọi tính năng giữ nguyên. Giao diện cũ không bị sửa.
 
-export type ViewKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'tongquan' | 'viectoi' | 'duan' | 'nhansu' | 'baocao' | 'taikhoan';
+export type ViewKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'q6' | 'q9' | 'tongquan' | 'viectoi' | 'duan' | 'nhansu' | 'baocao' | 'taikhoan';
 
 function relativeTime(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -159,7 +161,18 @@ export default function NewShell({
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   }
 
-  const inTabs = view === 'dashboard' || view === 'calendar' || view === 'ghichu' || view === 'phancong' || view === 'vanphong';
+  // Dự án Q6 / Q9: bấm vào dự án hoặc đầu việc → nhảy sang tab tương ứng thay vì mở cửa sổ dự án
+  const openProject = (id: string) => {
+    const bk = boardKeyOf(projects.find((p) => p.id === id));
+    if (bk) {
+      setView(bk);
+      setDrawerOpen(false);
+      setNotifOpen(false);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+    } else onSelectProject(id);
+  };
+
+  const inTabs = view === 'dashboard' || view === 'calendar' || view === 'ghichu' || view === 'phancong' || view === 'vanphong' || view === 'q6' || view === 'q9';
 
   const item = (on: boolean): React.CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 42, padding: expanded ? '0 12px' : 0,
@@ -353,7 +366,7 @@ export default function NewShell({
                   onClick={() => {
                     setNotifOpen(false);
                     setDrawerOpen(false);
-                    if (n.notification?.project_id) onSelectProject(n.notification.project_id);
+                    if (n.notification?.project_id) openProject(n.notification.project_id);
                   }}
                   style={{ display: 'flex', width: '100%', textAlign: 'left', gap: 10, padding: 10, border: 'none', background: 'transparent', borderRadius: 10, cursor: 'pointer', color: 'var(--text)', fontFamily: 'inherit' }}
                 >
@@ -402,7 +415,9 @@ export default function NewShell({
           ['calendar', 'Lịch'],
           ['ghichu', 'Ghi chú'],
           ['phancong', 'Phân công'],
-          ['vanphong', 'Văn phòng']
+          ['vanphong', 'Văn phòng'],
+          ['q6', 'Q6'],
+          ['q9', 'Q9']
         ] as [ViewKey, string][]
       ).map(([key, label]) => (
         <button
@@ -432,7 +447,7 @@ export default function NewShell({
           departments={departments}
           allStaff={allStaff}
           me={me}
-          onSelectProject={onSelectProject}
+          onSelectProject={openProject}
           onRefetch={onRefetch}
           externalQuery={externalQuery}
         />
@@ -441,6 +456,9 @@ export default function NewShell({
         <CalendarTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} me={me} onRefetch={onRefetch} />
       )}
       {view === 'ghichu' && <NotesTab me={me} />}
+      {(view === 'q6' || view === 'q9') && (
+        <BoardTab key={view} boardKey={view} project={projects.find((p) => boardKeyOf(p) === view) ?? null} tasks={tasks} allStaff={allStaff} me={me} onRefetch={onRefetch} />
+      )}
       {view === 'vanphong' && (
         <VanPhongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
       )}
@@ -455,7 +473,7 @@ export default function NewShell({
           briefs={briefs}
           departments={departments}
           allStaff={allStaff}
-          onOpenProject={onSelectProject}
+          onOpenProject={openProject}
           onGo={(v) => go(v)}
         />
       )}
@@ -467,7 +485,7 @@ export default function NewShell({
           departments={departments}
           allStaff={allStaff}
           me={me}
-          onSelectProject={onSelectProject}
+          onSelectProject={openProject}
           onRefetch={onRefetch}
           onlyStaffId={me.id}
           title="Việc của tôi"
@@ -482,11 +500,11 @@ export default function NewShell({
           departments={departments}
           group={group}
           onGroupChange={setGroup}
-          onSelectProject={onSelectProject}
+          onSelectProject={openProject}
         />
       )}
       {view === 'nhansu' && isAdminView && (
-        <StaffView me={me} projects={projects} tasks={tasks} briefs={briefs} departments={departments} onSelectProject={onSelectProject} />
+        <StaffView me={me} projects={projects} tasks={tasks} briefs={briefs} departments={departments} onSelectProject={openProject} />
       )}
       {view === 'baocao' && isAdminView && (
         <div style={{ margin: isMobile ? '-16px -14px 0' : '-28px -28px 0' }}>

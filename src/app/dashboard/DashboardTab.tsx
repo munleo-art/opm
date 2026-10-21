@@ -7,6 +7,7 @@ import WorkItemDetailModal from './WorkItemDetailModal';
 import StaffInfoModal from './StaffInfoModal';
 import ProjectPipelineModal from './ProjectPipelineModal';
 import { canAddProject } from '../../lib/permissions';
+import { boardKeyOf } from '../../lib/board';
 import { useIsMobile } from '../../lib/useIsMobile';
 import { ddmm, inWeekWindow, overdueGroups, weekOptions, weekWindow } from '../../lib/weeks';
 
@@ -416,6 +417,8 @@ export default function DashboardTab({
     );
 
   const selectedRow = rows.find((r) => r.key === selectedRowKey) ?? null;
+  // Đầu việc của dự án Q6 / Q9 → nhảy sang tab Q6 / Q9 thay vì mở cửa sổ chi tiết
+  const openRow = (row: WorkRow) => (boardKeyOf(row.project) ? onSelectProject(row.project.id) : setSelectedRowKey(row.key));
 
   const renderListRow = (row: WorkRow) => {
             const diffDays = row.nearestDeadline ? daysUntil(row.nearestDeadline) : null;
@@ -462,7 +465,7 @@ export default function DashboardTab({
                   {row.project.title}
                 </button>
                 <button
-                  onClick={() => setSelectedRowKey(row.key)}
+                  onClick={() => openRow(row)}
                   style={{
                     color: 'inherit',
                     fontWeight: 'inherit',
@@ -535,7 +538,7 @@ export default function DashboardTab({
                   {row.project.title}
                 </button>
                 <button
-                  onClick={() => setSelectedRowKey(row.key)}
+                  onClick={() => openRow(row)}
                   style={{ color: 'inherit', fontWeight: 'inherit', textAlign: 'left', background: 'none', border: 'none', padding: 0, fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
                 >
                   {row.headline || '—'}
@@ -879,7 +882,7 @@ export default function DashboardTab({
             <MobileWorkCard
               key={row.key}
               row={row}
-              onOpen={() => setSelectedRowKey(row.key)}
+              onOpen={() => openRow(row)}
               onOpenProject={() => onSelectProject(row.project.id)}
               onPickStaff={setSelectedStaff}
             />
@@ -894,7 +897,7 @@ export default function DashboardTab({
                 <MobileWorkCard
                   key={row.key}
                   row={row}
-                  onOpen={() => setSelectedRowKey(row.key)}
+                  onOpen={() => openRow(row)}
                   onOpenProject={() => onSelectProject(row.project.id)}
                   onPickStaff={setSelectedStaff}
                 />

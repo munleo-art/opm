@@ -223,6 +223,7 @@ export default function StaffView({
                       style={{ border: 'none', background: 'none', padding: 0, textAlign: 'left', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
                     >
                       {st.name}
+                      {(st as { resigned?: boolean }).resigned && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: '#C63C3C', background: '#FDECEC', borderRadius: 999, padding: '1px 7px' }}>Đã nghỉ</span>}
                     </button>
                     <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{formatDob(st.date_of_birth)}</div>
                     <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{st.employee_id}</div>

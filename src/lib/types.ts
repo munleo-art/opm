@@ -18,6 +18,8 @@ export interface Staff {
   avatar_url: string | null;
   // 'Nam' | 'Nữ' — dùng để vẽ nhân vật nam/nữ ở tab Văn phòng
   gender?: string | null;
+  // Đã nghỉ việc: khoá đăng nhập, gắn nhãn "Đã nghỉ", không chọn vào đầu việc mới
+  resigned?: boolean;
   department?: Department | null;
 }
 

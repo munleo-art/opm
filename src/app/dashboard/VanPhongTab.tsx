@@ -265,7 +265,7 @@ export default function VanPhongTab({
     // Người đi lại trong hành lang: nhân sự thật của 4 team, xen kẽ team
     const pools: Record<Team, Person[]> = { st: [], mkt: [], dung: [], ttth: [] };
     allStaff
-      .filter(ok)
+      .filter((s) => ok(s) && !(s as Staff & { resigned?: boolean }).resigned)
       .slice()
       .sort((a, c) => a.name.localeCompare(c.name, 'vi'))
       .forEach((s) => {
@@ -287,7 +287,7 @@ export default function VanPhongTab({
       [it.b, it.st, it.dg].forEach((pp) => { if (pp) busy[pp.full] = true; });
     }));
     const LEADERS: Person[] = allStaff
-      .filter((s) => ok(s) && s.permission === 'Cấp lãnh đạo' && !busy[s.name])
+      .filter((s) => ok(s) && !(s as Staff & { resigned?: boolean }).resigned && s.permission === 'Cấp lãnh đạo' && !busy[s.name] && (!!TEAM_BY_DEPT[deptName(s)] || deptName(s) === 'Ban Lãnh đạo'))
       .map((s) => person(s, 'st')!)
       .sort((a, c) => a.full.localeCompare(c.full, 'vi'));
     return { P, WK, LEADERS };

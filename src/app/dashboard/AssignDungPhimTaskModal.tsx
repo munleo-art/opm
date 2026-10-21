@@ -35,7 +35,7 @@ export default function AssignDungPhimTaskModal({
 
   const [category, setCategory] = useState(DUNGPHIM_CATEGORIES[0]);
   const [briefLink, setBriefLink] = useState('');
-  const dungPhimStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Team Dựng phim');
+  const dungPhimStaff = visibleStaff(allStaff, me).filter((s) => !(s as { resigned?: boolean }).resigned).filter((s) => s.department?.name === 'Team Dựng phim');
   const [assigneeId, setAssigneeId] = useState(dungPhimStaff[0]?.id ?? '');
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineHour, setDeadlineHour] = useState('09');

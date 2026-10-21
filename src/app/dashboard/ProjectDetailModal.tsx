@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import type { Project, Task, Staff } from '../../lib/types';
-import { canAddProject, canManageAnyTask, canEditTaskChecklist, visibleStaff } from '../../lib/permissions';
+import { canAddProject, canManageAnyTask, canEditTaskChecklist, visibleStaff, isResigned } from '../../lib/permissions';
 import DatePicker from './DatePicker';
 import { useIsMobile } from '../../lib/useIsMobile';
 
@@ -185,10 +185,12 @@ function TaskEditModal({
   const supabase = createClient();
   const isEdit = !!task;
 
-  const mktStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Ban Marketing');
-  const ttthStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Ban TTTH');
-  const stStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Ban Sáng tạo');
-  const dungStaff = visibleStaff(allStaff, me).filter((s) => s.department?.name === 'Team Dựng phim');
+  const keepIds = [task?.mkt_assignee_id, task?.ttth_assignee_id, task?.st_assignee_id, task?.dung_assignee_id];
+  const pickable = visibleStaff(allStaff, me).filter((s) => !isResigned(s) || keepIds.indexOf(s.id) >= 0);
+  const mktStaff = pickable.filter((s) => s.department?.name === 'Ban Marketing');
+  const ttthStaff = pickable.filter((s) => s.department?.name === 'Ban TTTH');
+  const stStaff = pickable.filter((s) => s.department?.name === 'Ban Sáng tạo');
+  const dungStaff = pickable.filter((s) => s.department?.name === 'Team Dựng phim');
 
   const [taskName, setTaskName] = useState(task?.task_name ?? '');
   // Chuyển đầu việc sang dự án khác (chỉ khi Sửa đầu việc): checklist, link, nhân sự… đi theo task_id nên giữ nguyên

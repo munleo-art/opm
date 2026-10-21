@@ -13,6 +13,8 @@ import CalendarTab from './CalendarTab';
 import NotesTab from './NotesTab';
 import PhanCongTab from './PhanCongTab';
 import VanPhongTab from './VanPhongTab';
+import BoardTab from './BoardTab';
+import { boardKeyOf } from '../../lib/board';
 import ProjectsTab from './ProjectsTab';
 import BriefTab from './BriefTab';
 import ProjectDetailModal from './ProjectDetailModal';
@@ -22,7 +24,7 @@ import { useTheme } from '../../lib/ThemeProvider';
 import { readUiVersion, saveUiVersion, type UiVersion } from '../../lib/uiVersion';
 import NewShell from './v2/NewShell';
 
-export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'duan' | 'brief' | 'taikhoan';
+export type TabKey = 'dashboard' | 'calendar' | 'ghichu' | 'phancong' | 'vanphong' | 'q6' | 'q9' | 'duan' | 'brief' | 'taikhoan';
 
 export default function AppShell() {
   const supabase = createClient();
@@ -98,6 +100,15 @@ export default function AppShell() {
     fetchAll();
   }, [fetchAll]);
 
+  // Tài khoản đã nghỉ việc: đăng xuất ngay (tài khoản đã bị khoá đăng nhập phía Supabase)
+  useEffect(() => {
+    if (!me || !(me as Staff & { resigned?: boolean }).resigned) return;
+    supabase.auth.signOut().then(() => {
+      if (typeof window !== 'undefined') window.location.href = '/login';
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
+
   // Theme đi theo tài khoản: áp theme đã lưu 1 lần khi tải xong tài khoản (không ghi đè lại mỗi lần làm mới dữ liệu).
   useEffect(() => {
     if (!me || themeLoadedFor.current === me.id) return;
@@ -150,6 +161,16 @@ export default function AppShell() {
   }
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  // Dự án Q6 / Q9 có bảng riêng: bấm vào dự án hoặc đầu việc của 2 dự án này → nhảy sang tab tương ứng
+  const openProject = (id: string) => {
+    const bk = boardKeyOf(projects.find((p) => p.id === id));
+    if (bk) {
+      setSelectedProjectId(null);
+      setActiveTab(bk);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+    } else setSelectedProjectId(id);
+  };
+  const boardProject = (k: 'q6' | 'q9') => projects.find((p) => boardKeyOf(p) === k) ?? null;
 
   // ===== GIAO DIỆN MỚI (chỉ khi tài khoản bật) — giao diện cũ bên dưới giữ nguyên =====
   if (uiVersion === 'new' && me) {
@@ -163,7 +184,7 @@ export default function AppShell() {
         briefs={briefs}
         notifications={notifications}
         onRefetch={fetchAll}
-        onSelectProject={(id) => setSelectedProjectId(id)}
+        onSelectProject={(id) => openProject(id)}
         uiVersion={uiVersion}
         onChangeUi={changeUi}
       >
@@ -230,7 +251,7 @@ export default function AppShell() {
             <NotificationBell
               notifications={notifications}
               onOpenProject={(projectId) => {
-                setSelectedProjectId(projectId);
+                openProject(projectId);
               }}
               onRefetch={fetchAll}
             />
@@ -269,7 +290,9 @@ export default function AppShell() {
               ['calendar', 'Lịch'],
               ['ghichu', 'Ghi chú'],
               ['phancong', 'Phân công'],
-              ['vanphong', 'Văn phòng']
+              ['vanphong', 'Văn phòng'],
+              ['q6', 'Q6'],
+              ['q9', 'Q9']
               // Tạm ẩn tab DỰ ÁN và BRIEF theo yêu cầu — logic/route vẫn giữ nguyên bên dưới, chỉ ẩn nút điều hướng.
             ] as [TabKey, string][]
           ).map(([key, label]) => (
@@ -308,11 +331,14 @@ export default function AppShell() {
             departments={departments}
             allStaff={allStaff}
             me={me}
-            onSelectProject={(id) => setSelectedProjectId(id)}
+            onSelectProject={(id) => openProject(id)}
             onRefetch={fetchAll}
           />
         )}
         {activeTab === 'ghichu' && <NotesTab me={me} />}
+        {(activeTab === 'q6' || activeTab === 'q9') && (
+          <BoardTab key={activeTab} boardKey={activeTab} project={boardProject(activeTab)} tasks={tasks} allStaff={allStaff} me={me} onRefetch={fetchAll} />
+        )}
         {activeTab === 'vanphong' && (
           <VanPhongTab projects={projects} tasks={tasks} briefs={briefs} departments={departments} allStaff={allStaff} />
         )}
@@ -334,12 +360,12 @@ export default function AppShell() {
           <ProjectsTab
             projects={projects}
             me={me}
-            onSelectProject={(id) => setSelectedProjectId(id)}
+            onSelectProject={(id) => openProject(id)}
             onAddProject={() => setAddProjectOpen(true)}
           />
         )}
         {activeTab === 'brief' && <BriefTab projects={projects} briefs={briefs} onSelectProject={(id) => {
-          setSelectedProjectId(id);
+          openProject(id);
           setActiveTab('duan');
         }} />}
         {activeTab === 'taikhoan' && <AccountTab me={me} onRefetch={fetchAll} uiVersion={uiVersion} onChangeUi={changeUi} />}

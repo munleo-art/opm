@@ -81,6 +81,11 @@ export function isDemoStaff(s: { name?: string | null } | null | undefined): boo
   return n.trim().toLowerCase().indexOf('demo') === 0;
 }
 
+// Nhân sự đã nghỉ việc (staff.resigned): giữ tên ở danh sách và đầu việc cũ, nhưng không cho chọn vào đầu việc mới.
+export function isResigned(s: unknown): boolean {
+  return !!(s && (s as { resigned?: boolean }).resigned);
+}
+
 export function visibleStaff<T extends { name?: string | null }>(list: T[], me: Staff | null): T[] {
   if (me && me.permission === 'Admin') return list;
   return list.filter((s: T) => !isDemoStaff(s));
